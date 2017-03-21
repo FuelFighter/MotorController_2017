@@ -11,7 +11,7 @@
 #include <util/delay.h>
 #include <avr/interrupt.h>
 #include "controller.h"
-#include "can.h"
+#include "UniversalModuleDrivers/can.h"
 #include "usbdb.h"
 
 
