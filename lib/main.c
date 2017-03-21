@@ -88,7 +88,6 @@ int main(void)
 	
 	int direction = 0;
 	uint16_t rpm = 0;
-	int count = 0;
 	
     while (1) 
     {	
@@ -96,26 +95,24 @@ int main(void)
 		{
 			rpm = (canMessage.data[0] << 8);
 			rpm |= canMessage.data[1];
+			printf("Received RPM: %u",rpm);
 		}
-		printf("Received RPM: %u\n",rpm);
 		
-		if (OCR3A >= 0xFF)
+		if (OCR1A == 0xFF)
 		{
 			direction = 1;
 		}
-		if (OCR3A == 0)
+		if (OCR1A == 0)
 		{
 			direction = 0;
 		}
 		if (direction == 0)
 		{
-			count++;
-			OCR3A = count;
+			OCR1A++;
 		}
 		if (direction == 1)
 		{
-			count--;
-			OCR3A = count;
+			OCR1A--;
 		}
 		
 		
@@ -126,5 +123,4 @@ int main(void)
 
 ISR(TIMER1_COMPA_vect){
 	can_read_message(&canMessage);
-	printf("Interrupt! %u", canMessage.id);
 }
