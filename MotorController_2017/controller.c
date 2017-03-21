@@ -6,29 +6,33 @@
  */ 
 
 #include <avr/io.h>
+#include "usbdb.h"
 
 #define RPMTOPROMILLE 0.2
-#define TIMESTEP 0.065536
+#define TIMESTEP 0.1
+#define PROMILLETO8BITHEX 0.255
 
 static uint8_t lastError = 0;
-static uint8_t error = 0;
+static int error = 0;
 static int intError = 0;
 static int derError = 0;
 
-static uint8_t K_p = 5;
-static uint8_t K_i = 1;
-static uint8_t K_d = 0;
+static int K_p = 1;
+static int K_i = 0;
+static int K_d = 0;
 
 static int propGain = 0;
 static int intGain = 0;
 static int derGain = 0;
 
-uint16_t controller(int currentRpm, uint16_t setPoint){
+uint16_t controller(uint16_t currentRpm, uint16_t setPoint){
 	
-	uint16_t dutyCycle = 0;
+	int output = 0;
 	
 	//calculate an percent error
-	error = setPoint - currentRpm * RPMTOPROMILLE;
+	int rpmInPromille = currentRpm * RPMTOPROMILLE;
+	
+	error = setPoint - rpmInPromille;
 	
 	//Calculate proportional gain
 	propGain = error * K_p;
@@ -45,13 +49,14 @@ uint16_t controller(int currentRpm, uint16_t setPoint){
 	//Calculate derivate gain
 	derGain = derError * K_d;	
 	
-	dutyCycle = propGain + intGain + derGain; 
+	output = propGain + intGain + derGain;
 	
-	if (dutyCycle >= 1000)
+	int dutyCycle = output * PROMILLETO8BITHEX; 
+	
+	if (dutyCycle >= 0xFF)
 	{
-		dutyCycle = 1000;
-	} else if (dutyCycle <= 0)
-	{
+		dutyCycle = 0xFF;
+	} else if (dutyCycle <= 0){
 		dutyCycle = 0;
 	}
 	

@@ -28,7 +28,8 @@
 
 #define ENCODER_ID 5
 
-CanMessage_t canMessage;
+static CanMessage_t canMessage;
+static volatile uint8_t newCan = 0;
 
 void pwm_init(void){
 	
@@ -84,47 +85,32 @@ int main(void)
 	usbdbg_init();
 	pwm_init();
 	can_init();
+	timer_init();
 	sei();
 	
-	int direction = 0;
 	uint16_t rpm = 0;
-	int count = 0;
+	uint16_t setPoint = 500;
 	
     while (1) 
     {	
-		if (canMessage.id == ENCODER_ID)
-		{
+		if (canMessage.id == ENCODER_ID && newCan)
+		{	
+			cli();
 			rpm = (canMessage.data[0] << 8);
 			rpm |= canMessage.data[1];
+			OCR3A = controller(rpm,setPoint);	
+			newCan = 0;
+			sei();
 		}
-		printf("Received RPM: %u\n",rpm);
-		
-		if (OCR3A >= 0xFF)
-		{
-			direction = 1;
-		}
-		if (OCR3A == 0)
-		{
-			direction = 0;
-		}
-		if (direction == 0)
-		{
-			count++;
-			OCR3A = count;
-		}
-		if (direction == 1)
-		{
-			count--;
-			OCR3A = count;
-		}
-		
-		
-		
-		_delay_ms(100);
+		_delay_ms(10);
     }
 }
 
 ISR(TIMER1_COMPA_vect){
-	can_read_message(&canMessage);
-	printf("Interrupt! %u", canMessage.id);
+	if (can_read_message(&canMessage))
+	{
+		newCan = 1;
+	}
+
+	TCNT1 = 0;
 }
