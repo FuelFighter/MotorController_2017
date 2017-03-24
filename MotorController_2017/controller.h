@@ -11,7 +11,6 @@
 
 #include <avr/io.h>
 
-uint16_t controller(int currentRpm, uint16_t setPoint);
-
+int32_t controller(uint16_t currentRpm, uint16_t setPoint);
 
 #endif /* CONTROLLER_H_ */

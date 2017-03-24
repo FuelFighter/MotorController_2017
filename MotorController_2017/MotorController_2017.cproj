@@ -151,6 +151,22 @@
     <Compile Include="UniversalModuleDrivers\can.h">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="UniversalModuleDrivers\pid.c">
+      <SubType>compile</SubType>
+      <Link>pid.c</Link>
+    </Compile>
+    <Compile Include="UniversalModuleDrivers\pid.h">
+      <SubType>compile</SubType>
+      <Link>pid.h</Link>
+    </Compile>
+    <Compile Include="UniversalModuleDrivers\pwm.c">
+      <SubType>compile</SubType>
+      <Link>pwm.c</Link>
+    </Compile>
+    <Compile Include="UniversalModuleDrivers\pwm.h">
+      <SubType>compile</SubType>
+      <Link>pwm.h</Link>
+    </Compile>
     <Compile Include="UniversalModuleDrivers\rgbled.c">
       <SubType>compile</SubType>
     </Compile>
@@ -163,11 +179,13 @@
     <Compile Include="UniversalModuleDrivers\uart.h">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="usbdb.c">
+    <Compile Include="UniversalModuleDrivers\usbdb.c">
       <SubType>compile</SubType>
+      <Link>usbdb.c</Link>
     </Compile>
-    <Compile Include="usbdb.h">
+    <Compile Include="UniversalModuleDrivers\usbdb.h">
       <SubType>compile</SubType>
+      <Link>usbdb.h</Link>
     </Compile>
   </ItemGroup>
   <ItemGroup>
