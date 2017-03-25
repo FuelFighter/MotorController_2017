@@ -19,12 +19,13 @@
 #define ENCODER_ID 5
 
 static CanMessage_t canMessage;
-static volatile uint8_t newCan = 0;
+static volatile uint8_t newSample = 0;
+uint16_t rpm = 0;
+uint16_t setPoint = 0;
 
 void pin_init(){
 	DDRE |= (1<<PE3)|(1<<PE4);
 	PORTE &= ~((1<<PE3)|(1<<PE4));
-	
 	DDRB &= ~(1<<PB0);
 }
 
@@ -32,7 +33,7 @@ void timer_init(){
 	TCCR1B |= (1<<CS11)|(1<<CS10);
 	TCNT1 = 0;
 	TIMSK1 |= (1<<OCIE1A);
-	OCR1A = 12500;
+	OCR1A = 12500/2;
 }
 
 int main(void)
@@ -46,29 +47,23 @@ int main(void)
 	pid_init(0.1, 1.0, 0.0, 2.0);
 	sei();
 	
-	uint16_t rpm = 0;
-	uint16_t setPoint = 500;
+	setPoint = 2500;
 	
-    while (1) 
-    {	
-		if (canMessage.id == ENCODER_ID && newCan)
-		{	
+    while (1){	
+		if (can_read_message(&canMessage)){	
 			cli();
 			rpm = (canMessage.data[0] << 8);
-			rpm |= canMessage.data[1];
-			OCR3A = controller(rpm,setPoint);	
-			newCan = 0;
+			rpm |= canMessage.data[1];	
+			newSample = 1;
 			sei();
 		}
-		_delay_ms(1);
     }
 }
 
 ISR(TIMER1_COMPA_vect){
-	if (can_read_message(&canMessage))
-	{
-		newCan = 1;
+	if (newSample){
+		OCR3A = controller(rpm,setPoint);
+		newSample = 0;
 	}
-
 	TCNT1 = 0;
 }
