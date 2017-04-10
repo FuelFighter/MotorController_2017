@@ -17,6 +17,7 @@
 #include "UniversalModuleDrivers/can.h"
 
 #define ENCODER_ID 5
+#define NO_MSG 255
 
 static CanMessage_t canMessage;
 static volatile uint8_t newSample = 0;
@@ -42,7 +43,7 @@ int main(void)
 	pin_init();
 	usbdbg_init();
 	pwm_init();
-	can_init();
+	can_init(0xFF,ENCODER_ID);
 	timer_init();
 	pid_init(0.1, 1.0, 0.0, 2.0);
 	sei();
@@ -50,13 +51,18 @@ int main(void)
 	setPoint = 2500;
 	
     while (1){	
-		if (can_read_message(&canMessage)){	
+		can_read_message_if_new(&canMessage);
+		
+		if(canMessage.id == ENCODER_ID){
 			cli();
 			rpm = (canMessage.data[0] << 8);
-			rpm |= canMessage.data[1];	
+			rpm |= canMessage.data[1];
 			newSample = 1;
 			sei();
 		}
+		
+		
+		
     }
 }
 
@@ -64,6 +70,7 @@ ISR(TIMER1_COMPA_vect){
 	if (newSample){
 		OCR3A = controller(rpm,setPoint);
 		newSample = 0;
+		canMessage.id = NO_MSG;
 	}
 	TCNT1 = 0;
 }

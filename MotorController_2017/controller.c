@@ -26,3 +26,7 @@ int32_t controller(uint16_t currentRpm, uint16_t setPoint){
 	
 	return dutyCycle;
 }
+
+uint16_t current_saturation(uint16_t *rpm){
+	
+}
