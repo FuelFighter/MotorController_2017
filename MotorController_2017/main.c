@@ -22,6 +22,7 @@ static CanMessage_t canMessage;
 static volatile uint8_t newSample = 0;
 uint16_t rpm = 0;
 uint16_t setPoint = 0;
+uint8_t timerInterrupt = 0;
 
 void pin_init(){
 	DDRE |= (1<<PE3)|(1<<PE4);
@@ -61,9 +62,6 @@ int main(void)
 }
 
 ISR(TIMER1_COMPA_vect){
-	if (newSample){
-		OCR3A = controller(rpm,setPoint);
-		newSample = 0;
-	}
+	timerInterrupt = 1;
 	TCNT1 = 0;
 }
