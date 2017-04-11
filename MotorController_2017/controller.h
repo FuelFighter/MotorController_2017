@@ -12,5 +12,6 @@
 #include <avr/io.h>
 
 int32_t controller(uint16_t currentRpm, uint16_t setPoint);
+uint16_t current_saturation(uint16_t *rpm, uint16_t wanted_pwm);
 
 #endif /* CONTROLLER_H_ */
