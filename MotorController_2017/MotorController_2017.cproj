@@ -145,6 +145,12 @@
     <Compile Include="main.c">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="UniversalModuleDrivers\adc.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="UniversalModuleDrivers\adc.h">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="UniversalModuleDrivers\can.c">
       <SubType>compile</SubType>
     </Compile>
@@ -171,6 +177,12 @@
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="UniversalModuleDrivers\rgbled.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="UniversalModuleDrivers\spi.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="UniversalModuleDrivers\spi.h">
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="UniversalModuleDrivers\uart.c">
