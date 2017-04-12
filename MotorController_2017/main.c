@@ -60,7 +60,7 @@ int main(void)
 	pwm_init();
 	can_init(0,0);
 	timer_init();
-	pid_speed_init(0.1, 1.0, 0.0, 2.0);
+	pid_init(0.1, 1.0, 0.0, 2.0);
 	adc_init();
 	sei();
 	
@@ -79,7 +79,7 @@ int main(void)
 		*/
 		if (canMessage.id == STEERINGWHEEL){
 			
-			if(canMessage.data[1]|(CRUISECONTROL << 1) & (state != CC_MODE)){
+			if((canMessage.data[1]|(CRUISECONTROL << 1)) & (state != CC_MODE)){
 				state = CC_MODE;
 				cruise_speed = rpm/45; //needs to convert to km/h
 				setPoint_rpm = rpm;
@@ -105,7 +105,7 @@ int main(void)
 					newSample = 1;
 					
 				}
-				current_saturation(*setPoint_pwm, *rpm);
+				current_saturation(&setPoint_pwm, &rpm);
 				OCR3B = setPoint_pwm;
 				
 				break;

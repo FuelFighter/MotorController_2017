@@ -20,7 +20,7 @@
 
 int32_t controller(uint16_t currentRpm, uint16_t setPoint){
 	
-	int32_t output = pid_speed(currentRpm, setPoint);	
+	int32_t output = pid(currentRpm, setPoint);	
 	
 	int32_t dutyCycle = output * RPMTO8BIT; 
 	
