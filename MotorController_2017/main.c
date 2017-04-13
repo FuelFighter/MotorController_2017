@@ -18,9 +18,9 @@
 #include "UniversalModuleDrivers/can.h"
 #include "UniversalModuleDrivers/adc.h"
 
-#define ENCODER_ID 5
+#define ENCODER_ID 0x005
 #define CRUISECONTROL 2
-#define STEERINGWHEEL 20
+#define STEERINGWHEEL 0x014
 #define NO_MSG 255
 #define INTMAX_CURRENT 0x1FF
 
@@ -29,7 +29,9 @@
 
 
 
-static CanMessage_t canMessage;
+volatile CanMessage_t rxFrame;
+volatile CanMessage_t txFrame;
+
 static volatile uint8_t newSample = 0;
 uint16_t rpm = 0;
 uint16_t setPoint_rpm = 0;
@@ -49,7 +51,7 @@ void timer_init(){
 	TCCR1B |= (1<<CS11)|(1<<CS10);
 	TCNT1 = 0;
 	TIMSK1 |= (1<<OCIE1A);
-	OCR1A = 12500/2;
+	OCR1A = 12500;
 }
 
 int main(void)
@@ -62,71 +64,58 @@ int main(void)
 	timer_init();
 	pid_init(0.1, 1.0, 0.0, 2.0);
 	adc_init();
+	
+	txFrame.id = 0x123;
+	txFrame.length = 4;
+	txFrame.data[0] = 0xCA;
+	txFrame.data[1] = 0xFE;
+	txFrame.data[2] = 0xBA;
+	txFrame.data[3] = 0xBE;
+	
 	sei();
 	
-	//setPoint_rpm = 1000;
-	
     while (1){	
-		can_read_message_if_new(&canMessage);
-		/*
-		if(canMessage.id == ENCODER_ID){
-			cli();
-			rpm = (canMessage.data[0] << 8);
-			rpm |= canMessage.data[1];
-			newSample = 1;
-			sei();
-		}
-		*/
-		if (canMessage.id == STEERINGWHEEL){
-			
-			if((canMessage.data[1]|(CRUISECONTROL << 1)) & (state != CC_MODE)){
-				state = CC_MODE;
-				cruise_speed = rpm/45; //needs to convert to km/h
-				setPoint_rpm = rpm;
-				
-			}
-			else if(canMessage.data[1]|(CRUISECONTROL << 1) ){
-			}
-		}
-		
 		switch(state){
 			case NORMAL_MODE:
-				//Normal stuff
-				cli();
-				if(canMessage.id == STEERINGWHEEL){
-					throttle_cmd = canMessage.data[2];
-					setPoint_pwm = throttle_cmd*0xFF;
-					
+				can_read_message_if_new(&rxFrame);
+
+				if(rxFrame.id == STEERINGWHEEL){
+					throttle_cmd = rxFrame.data[3];
+					setPoint_pwm = throttle_cmd*2.55;
+					rxFrame.id = NO_MSG;
 				}
-				if(canMessage.id == ENCODER_ID){
-					
-					rpm = (canMessage.data[0] << 8);
-					rpm |= canMessage.data[1];
+				if(rxFrame.id == ENCODER_ID){
+					rpm = (rxFrame.data[0] << 8);
+					rpm |= rxFrame.data[1];
 					newSample = 1;
-					
+					rxFrame.id = NO_MSG;
+					printf("New Encoder Val!\n\r");
 				}
-				current_saturation(&setPoint_pwm, &rpm);
+				
+				
+				//current_saturation(&setPoint_pwm, &rpm);
 				OCR3B = setPoint_pwm;
 				
 				break;
+				
 			case CC_MODE:
-			if (canMessage.id == STEERINGWHEEL){
-				if (canMessage.data[5] > 75){
+			if (rxFrame.id == STEERINGWHEEL){
+				if (rxFrame.data[5] > 75){
 					cruise_speed++;
 					setPoint_rpm = setPoint_rpm + 45;
 					
 				}
-				if (canMessage.data[5] < 25){
+				if (rxFrame.data[5] < 25){
 					cruise_speed--;
 					setPoint_rpm = setPoint_rpm - 45;
 				}
 			}
 				
 			
-			if(canMessage.id == ENCODER_ID){
+			if(rxFrame.id == ENCODER_ID){
 				cli();
-				rpm = (canMessage.data[0] << 8);
-				rpm |= canMessage.data[1];
+				rpm = (rxFrame.data[0] << 8);
+				rpm |= rxFrame.data[1];
 				newSample = 1;
 				sei();
 			}
@@ -142,8 +131,11 @@ ISR(TIMER1_COMPA_vect){
 		current_saturation(&pwm_target, &rpm);
 		OCR3B = pwm_target;
 		newSample = 0;
-		canMessage.id = NO_MSG;
+		rxFrame.id = NO_MSG;
 	}
+	cruise_speed++;
+	can_send_message(&txFrame);
+	printf("Int! %u\n\r",cruise_speed);
 	TCNT1 = 0;
 }
 

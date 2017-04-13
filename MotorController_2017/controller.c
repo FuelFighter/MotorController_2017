@@ -15,8 +15,8 @@
 #define SG (0.668)		//Speed/torque gradient
 #define SC 248			//Speed constant
 #define IMAX 2
-#define VCC 10
-#define V2PWM 0xFFFF/VCC
+#define VCC 30
+#define V2PWM 0xFF/VCC
 
 int32_t controller(uint16_t currentRpm, uint16_t setPoint){
 	
