@@ -29,8 +29,8 @@
 
 
 
-volatile CanMessage_t rxFrame;
-volatile CanMessage_t txFrame;
+CanMessage_t rxFrame;
+CanMessage_t txFrame;
 
 static volatile uint8_t newSample = 0;
 uint16_t rpm = 0;
@@ -40,12 +40,6 @@ uint16_t current = 0;
 uint8_t throttle_cmd = 0;
 uint8_t state = NORMAL_MODE;
 uint8_t cruise_speed = 0;
-
-void pin_init(){
-	DDRE |= (1<<PE3)|(1<<PE4);
-	PORTE &= ~((1<<PE3)|(1<<PE4));
-	DDRB &= ~(1<<PB0);
-}
 
 void timer_init(){
 	TCCR1B |= (1<<CS11)|(1<<CS10);
@@ -57,41 +51,30 @@ void timer_init(){
 int main(void)
 {
 	cli();
-	pin_init();
 	usbdbg_init();
 	pwm_init();
 	can_init(0,0);
 	timer_init();
-	pid_init(0.1, 1.0, 0.0, 2.0);
-	adc_init();
-	
-	txFrame.id = 0x123;
-	txFrame.length = 4;
-	txFrame.data[0] = 0xCA;
-	txFrame.data[1] = 0xFE;
-	txFrame.data[2] = 0xBA;
-	txFrame.data[3] = 0xBE;
-	
 	sei();
+	
 	
     while (1){	
 		switch(state){
 			case NORMAL_MODE:
-				can_read_message_if_new(&rxFrame);
-
-				if(rxFrame.id == STEERINGWHEEL){
-					throttle_cmd = rxFrame.data[3];
-					setPoint_pwm = throttle_cmd*2.55;
-					rxFrame.id = NO_MSG;
+				if (can_read_message_if_new(&rxFrame))
+				{
+					if(rxFrame.id == STEERINGWHEEL){
+						throttle_cmd = rxFrame.data[3];
+						setPoint_pwm = throttle_cmd*2.55;
+					}
+					if(rxFrame.id == ENCODER_ID){
+						rpm = (rxFrame.data[0] << 8);
+						rpm |= rxFrame.data[1];
+					}
+					printf("Throttle: %u \t",throttle_cmd);
+					printf("PWM setpoint: %u \t", setPoint_pwm);
+					printf("RPM: %u\n",rpm);
 				}
-				if(rxFrame.id == ENCODER_ID){
-					rpm = (rxFrame.data[0] << 8);
-					rpm |= rxFrame.data[1];
-					newSample = 1;
-					rxFrame.id = NO_MSG;
-					printf("New Encoder Val!\n\r");
-				}
-				
 				
 				//current_saturation(&setPoint_pwm, &rpm);
 				OCR3B = setPoint_pwm;
@@ -116,7 +99,7 @@ int main(void)
 				cli();
 				rpm = (rxFrame.data[0] << 8);
 				rpm |= rxFrame.data[1];
-				newSample = 1;
+				//newSample = 1;
 				sei();
 			}
 				//Cruise stuff
@@ -129,13 +112,11 @@ ISR(TIMER1_COMPA_vect){
 	if (newSample){
 		uint16_t pwm_target = controller(rpm,setPoint_rpm);
 		current_saturation(&pwm_target, &rpm);
-		OCR3B = pwm_target;
+		//OCR3B = pwm_target;
 		newSample = 0;
 		rxFrame.id = NO_MSG;
 	}
-	cruise_speed++;
-	can_send_message(&txFrame);
-	printf("Int! %u\n\r",cruise_speed);
+	//OCR3B = setPoint_pwm;
 	TCNT1 = 0;
 }
 
