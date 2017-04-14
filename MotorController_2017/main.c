@@ -18,9 +18,11 @@
 #include "UniversalModuleDrivers/can.h"
 #include "UniversalModuleDrivers/adc.h"
 
+#define MOTOR_ID 1
+
 #define ENCODER_ID 0x005
 #define CRUISECONTROL 2
-#define STEERINGWHEEL 0x014
+#define STEERINGWHEEL 0x020
 #define NO_MSG 255
 #define INTMAX_CURRENT 0x1FF
 
