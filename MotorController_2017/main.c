@@ -28,6 +28,7 @@
 
 #define NORMAL_MODE 0
 #define CC_MODE 1
+#define TORQUE_MODE 2
 
 
 
@@ -42,12 +43,22 @@ uint16_t current = 0;
 uint8_t throttle_cmd = 0;
 uint8_t state = NORMAL_MODE;
 uint8_t cruise_speed = 0;
+// Flag
+uint8_t cal_torque = 0;
 
 void timer_init(){
 	TCCR1B |= (1<<CS11)|(1<<CS10);
 	TCNT1 = 0;
 	TIMSK1 |= (1<<OCIE1A);
 	OCR1A = 12500;
+}
+
+void timer_init_torque(){
+	// Timer > ~100Hz, prescale = 256
+	TCCR0A |= (1<<CS02)|(1<<CS00)|(1<<CS01);
+	OCR0A = 255;
+	TIMSK0 |= (1<<OCIE0A);
+	TCNT0 = 0;
 }
 
 int main(void)
@@ -57,12 +68,30 @@ int main(void)
 	pwm_init();
 	can_init(0,0);
 	timer_init();
+	timer_init_torque();
 	sei();
 	
+	//Variables
+	uint16_t ampere = 0;				//mV
 	
-    while (1){	
+	
+    while (1){
 		switch(state){
 			case NORMAL_MODE:
+				if(cal_torque){
+					cli();
+					current = adc_read(CH_ADC0);
+					current -= 785;
+					if (current > 6520)
+					{
+						current = 0;
+					}
+					ampere = 7*current;
+					printf("ADC: %u\t", current);
+					printf("Amp: %u\n", ampere);
+					cal_torque = 0;
+					sei();
+				}
 				if (can_read_message_if_new(&rxFrame))
 				{
 					if(rxFrame.id == STEERINGWHEEL){
@@ -79,8 +108,7 @@ int main(void)
 				}
 				
 				//current_saturation(&setPoint_pwm, &rpm);
-				OCR3B = setPoint_pwm;
-				
+				OCR3B = setPoint_pwm;				
 				break;
 				
 			case CC_MODE:
@@ -106,6 +134,9 @@ int main(void)
 			}
 				//Cruise stuff
 				break;
+			case TORQUE_MODE:
+				
+				break;
 		}
     }
 }
@@ -122,3 +153,7 @@ ISR(TIMER1_COMPA_vect){
 	TCNT1 = 0;
 }
 
+ISR(TIMER0_OVF_vect){
+	cal_torque = 1;
+	TCNT0 = 0;
+}
