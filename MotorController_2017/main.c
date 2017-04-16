@@ -11,69 +11,74 @@
 #include <util/delay.h>
 #include <avr/interrupt.h>
 #include "controller.h"
-
 #include "UniversalModuleDrivers/usbdb.h"
 #include "UniversalModuleDrivers/pwm.h"
 #include "UniversalModuleDrivers/pid.h"
 #include "UniversalModuleDrivers/can.h"
 #include "UniversalModuleDrivers/adc.h"
 
-#define MOTOR_ID 1
-
 #define ENCODER_ID 0x005
-#define CRUISECONTROL 2
 #define STEERINGWHEEL 0x020
-#define NO_MSG 255
 #define INTMAX_CURRENT 0x1FF
+#define NO_MSG 0xFFF
 
 #define NORMAL_MODE 0
 #define CC_MODE 1
 #define TORQUE_MODE 2
+#define TEST_MODE 0xFF
+#define BLANK 0xFE
+
+uint8_t state = BLANK;
 
 
-
+// Types
 CanMessage_t rxFrame;
 CanMessage_t txFrame;
+Pid_t Speed;
+Pid_t Torque;
 
+// Physical values
 static volatile uint8_t newSample = 0;
-uint16_t rpm = 0;
-uint16_t setPoint_rpm = 0;
-uint16_t setPoint_pwm = 0;
-uint16_t current = 0;
-uint8_t throttle_cmd = 0;
-uint8_t state = NORMAL_MODE;
-uint8_t cruise_speed = 0;
-// Flag
-uint8_t cal_torque = 0;
+static uint16_t rpm = 0;
+static uint16_t current = 0;
 
-void timer_init(){
-	TCCR1B |= (1<<CS11)|(1<<CS10);
+// Setpoints and commands
+static uint16_t setPoint_rpm = 2000;
+static uint16_t setPoint_pwm = 0;
+static uint8_t cruise_speed = 0;
+static uint8_t throttle_cmd = 0;
+
+// Control values
+static uint8_t count_torque = 0;
+static uint8_t cal_torque = 0;
+
+
+
+
+void timer_init_ts(){
+	TCCR1B |= (1<<CS10)|(1<<CS11);
+	TCCR1B |= (1<<WGM12); //CTC
 	TCNT1 = 0;
 	TIMSK1 |= (1<<OCIE1A);
-	OCR1A = 12500;
+	OCR1A = 12500/2 - 1;
 }
 
-void timer_init_torque(){
-	// Timer > ~100Hz, prescale = 256
-	TCCR0A |= (1<<CS02)|(1<<CS00)|(1<<CS01);
-	OCR0A = 255;
-	TIMSK0 |= (1<<OCIE0A);
-	TCNT0 = 0;
-}
-
-int main(void)
+int main(void)	
 {
 	cli();
+	pid_init_test(&Speed, 1, 1.0, 0.0, 1.0);
+	pid_init_test(&Torque, 0.1, 1.0, 0.0, 0.0);
 	usbdbg_init();
 	pwm_init();
 	can_init(0,0);
-	timer_init();
-	timer_init_torque();
+	timer_init_ts();
+	adc_init();
 	sei();
 	
 	//Variables
 	uint16_t ampere = 0;				//mV
 	
+	OCR3B =0xFF;
 	
     while (1){
 		switch(state){
@@ -87,8 +92,6 @@ int main(void)
 						current = 0;
 					}
 					ampere = 7*current;
-					printf("ADC: %u\t", current);
-					printf("Amp: %u\n", ampere);
 					cal_torque = 0;
 					sei();
 				}
@@ -102,13 +105,8 @@ int main(void)
 						rpm = (rxFrame.data[0] << 8);
 						rpm |= rxFrame.data[1];
 					}
-					printf("Throttle: %u \t",throttle_cmd);
-					printf("PWM setpoint: %u \t", setPoint_pwm);
-					printf("RPM: %u\n",rpm);
 				}
-				
-				//current_saturation(&setPoint_pwm, &rpm);
-				OCR3B = setPoint_pwm;				
+				OCR3B = setPoint_pwm;
 				break;
 				
 			case CC_MODE:
@@ -129,31 +127,47 @@ int main(void)
 				cli();
 				rpm = (rxFrame.data[0] << 8);
 				rpm |= rxFrame.data[1];
-				//newSample = 1;
 				sei();
 			}
-				//Cruise stuff
 				break;
-			case TORQUE_MODE:
 				
+			case TORQUE_MODE:
+				current = adc_read(CH_ADC0);
+				printf("ADC: %u\n",current);
+				break;
+			case TEST_MODE:
+				if (can_read_message_if_new(&rxFrame))
+				{
+					if (rxFrame.id == ENCODER_ID){
+						rpm = (rxFrame.data[0] << 8);
+						rpm |= rxFrame.data[1];
+						rxFrame.id = NO_MSG;
+						newSample = 1;
+					}
+				}
+				break;
+				
+			case BLANK:
+				//Timer test
 				break;
 		}
     }
 }
 
 ISR(TIMER1_COMPA_vect){
+	//Torque control goes here 10Hz
 	if (newSample){
-		uint16_t pwm_target = controller(rpm,setPoint_rpm);
-		current_saturation(&pwm_target, &rpm);
-		//OCR3B = pwm_target;
+		uint16_t pwm_target = controller(&Speed, rpm, setPoint_rpm);
+		OCR3B = pwm_target;
 		newSample = 0;
 		rxFrame.id = NO_MSG;
 	}
+	
+	count_torque +=1;
+	if (count_torque == 10){
+		// Speed Control goes here 1Hz
+		count_torque = 0;
+	}
 	//OCR3B = setPoint_pwm;
-	TCNT1 = 0;
-}
-
-ISR(TIMER0_OVF_vect){
-	cal_torque = 1;
-	TCNT0 = 0;
+	
 }

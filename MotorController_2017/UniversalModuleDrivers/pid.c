@@ -4,12 +4,12 @@
  * Created: 24.03.2017 13:52:07
  *  Author: Jorgen Jackwitz
  */ 
-#include <avr/io.h>
-#include "usbdb.h"
+
+#include "pid.h"
 
 #define TIMECONSTANT 1000000
 #define GAINCONSTANT 1000
-
+/*
 static int lastError = 0;
 static int totError = 0;
 static int intError = 0;
@@ -32,7 +32,7 @@ pid_init receives Kp, Kd and Ki as positive floats. TimeStep, t, is a positive f
 As long as the setpoint and currentValue are in the same range the pid can calculate for any values between +- 2^15  
 */
 
-
+/*
 void pid_init(float t, float p, float d, float i){
 	timeStep = t;
 	Kp = p;
@@ -76,4 +76,39 @@ int32_t pid(uint16_t currentValue, uint16_t setPoint){
 		printf("output: %d \n", output);
 		
 		return output;
+}
+*/
+int32_t pid_test(Pid_t *PID, uint16_t currentValue, uint16_t setpoint){
+	int output = 0;
+	
+	PID->totError = setpoint - currentValue;
+	// Proportional gain
+	int propGain = (PID->Kp)*(PID->totError);
+	// Integration gain
+	PID->intError = PID->intError + (PID->timeStep)*(PID->totError);
+	int intGain = PID->intError*(PID->Ki);
+	// Derivation gain
+	PID->derError = (PID->totError - PID->lastError)/(PID->timeStep);
+	int derGain = (PID->derError)*(PID->Kd);
+	PID->lastError = PID->totError;
+	
+	printf("totError: %d \t", PID->totError);
+	printf("IntError: %d \t", PID->intError);
+	printf("DerError: %d \t",PID->derError);
+	
+	printf("PropGain: %d \t", propGain);
+	printf("IntGain: %d \t", intGain);
+	printf("DerGain: %d \t", derGain);
+	
+	// Pid output
+	output = propGain + intGain + derGain;
+	printf("Out: %d \n", output);
+	return output;
+}
+
+void pid_init_test(Pid_t *PID, float t, float p, float i, float d){
+	PID->Kp = p;
+	PID->Ki = i;
+	PID->Kd = d;
+	PID->timeStep = t;
 }

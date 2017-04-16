@@ -10,8 +10,9 @@
 #define CONTROLLER_H_
 
 #include <avr/io.h>
+#include "UniversalModuleDrivers/pid.h"
 
-int32_t controller(uint16_t currentRpm, uint16_t setPoint);
+int32_t controller(Pid_t *PID, uint16_t currentRpm, uint16_t setPoint);
 uint16_t current_saturation(uint16_t *rpm, uint16_t *wanted_pwm);
 
 #endif /* CONTROLLER_H_ */

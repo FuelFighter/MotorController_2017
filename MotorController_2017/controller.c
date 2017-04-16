@@ -11,16 +11,15 @@
 
 #define RPMTO8BIT 0.051
 
-#define TC 38			//Torque constant
-#define SG (0.668)		//Speed/torque gradient
-#define SC 248			//Speed constant
-#define IMAX 2
-#define VCC 30
+#define TC 94			//Torque constant
+#define SG (0.666)		//Speed/torque gradient
+#define SC 102			//Speed constant
+#define IMAX 20
+#define VCC 50
 #define V2PWM 0xFF/VCC
 
-int32_t controller(uint16_t currentRpm, uint16_t setPoint){
-	
-	int32_t output = pid(currentRpm, setPoint);	
+int32_t controller(Pid_t *PID, uint16_t currentRpm, uint16_t setPoint){
+	int32_t output = pid_test(PID ,currentRpm, setPoint);	
 	
 	int32_t dutyCycle = output * RPMTO8BIT; 
 	
@@ -30,13 +29,14 @@ int32_t controller(uint16_t currentRpm, uint16_t setPoint){
 	} else if (dutyCycle <= 0){
 		dutyCycle = 0;
 	}
-	
+	//printf("DC: %u\n",dutyCycle);
 	return dutyCycle;
 }
 
 void current_saturation(uint16_t *rpm, uint16_t *pwm){
-	int pwmMax = V2PWM*(*rpm + TC*SC*IMAX)/SG;
-	
+	int pwmMax = (*rpm + TC*SG*IMAX)/SC;
+	printf("RPM: %u \t",*rpm);
+	printf("PWMMAX: %u \t",pwmMax);
 	if(*pwm > pwmMax){
 		*pwm = pwmMax;
 	}
