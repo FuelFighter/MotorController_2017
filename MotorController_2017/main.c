@@ -41,7 +41,7 @@ Pid_t Torque;
 
 static uint16_t rpm = 0;
 static uint32_t cum_amp = 0;
-static uint16_t amp = 0;
+static uint32_t amp = 0;
 
 // Setpoints and commands
 static uint16_t setPoint_rpm = 2000;
@@ -56,6 +56,7 @@ static uint8_t count_speed = 0;
 //static uint8_t cal_torque = 0;
 static uint8_t current_samps = 0;
 static volatile uint8_t newSample = 0;
+static uint16_t nTimerInterrupts = 0;
 
 
 void timer_init_ts(){
@@ -78,7 +79,7 @@ int main(void)
 	timer_init_ts();
 	adc_init();
 	sei();
-	ICR3=0x320;	
+
 	OCR3B = 0x00;
     while (1){
 		switch(state){
@@ -95,9 +96,6 @@ int main(void)
 					}
 				}
 				OCR3B = setPoint_pwm;
-				amp = adc_read(CH_ADC3);
-				
-				printf("Amp: %u\n",amp);
 				break;
 				
 			case CC_MODE:
@@ -175,6 +173,25 @@ ISR(TIMER1_COMPA_vect){
 		count_speed = 0;
 	/////////////////////////////////////////////////////////////
 	}
+}
 
-	
+ISR(TIMER3_OVF_vect)
+{
+	if (nTimerInterrupts % 200 == 0)
+	{
+		_delay_us(10);
+		amp = adc_read(CH_ADC3);
+		printf("Amp: %u \r\n", amp);
+		nTimerInterrupts=0;
+	}
+	nTimerInterrupts++;
+}
+
+ISR(TIMER3_COMPA_vect)
+{
+	if (nTimerInterrupts % 1000 == 0)
+	{
+		printf("Amp compa: %u \r\n",adc_read(CH_ADC3));
+	}
+	nTimerInterrupts++;
 }
