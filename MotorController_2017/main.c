@@ -28,7 +28,7 @@
 #define TEST_MODE 0xFF
 #define BLANK 0xFE
 
-uint8_t state = BLANK;
+uint8_t state = NORMAL_MODE;
 
 
 // Types
@@ -38,21 +38,24 @@ Pid_t Speed;
 Pid_t Torque;
 
 // Physical values
-static volatile uint8_t newSample = 0;
+
 static uint16_t rpm = 0;
-static uint16_t current = 0;
+static uint32_t cum_amp = 0;
+static uint16_t amp = 0;
 
 // Setpoints and commands
 static uint16_t setPoint_rpm = 2000;
 static uint16_t setPoint_pwm = 0;
+static uint16_t setPoint_amp = 1;
 static uint8_t cruise_speed = 0;
 static uint8_t throttle_cmd = 0;
+static uint16_t pwm_target = 0;
 
 // Control values
-static uint8_t count_torque = 0;
-static uint8_t cal_torque = 0;
-
-
+static uint8_t count_speed = 0;
+//static uint8_t cal_torque = 0;
+static uint8_t current_samps = 0;
+static volatile uint8_t newSample = 0;
 
 
 void timer_init_ts(){
@@ -60,11 +63,12 @@ void timer_init_ts(){
 	TCCR1B |= (1<<WGM12); //CTC
 	TCNT1 = 0;
 	TIMSK1 |= (1<<OCIE1A);
-	OCR1A = 12500/2 - 1;
+	OCR1A = 12500 - 1;
 }
 
 int main(void)	
 {
+	printf("Running!\n");
 	cli();
 	pid_init_test(&Speed, 1, 1.0, 0.0, 1.0);
 	pid_init_test(&Torque, 0.1, 1.0, 0.0, 0.0);
@@ -74,32 +78,16 @@ int main(void)
 	timer_init_ts();
 	adc_init();
 	sei();
-	
-	//Variables
-	uint16_t ampere = 0;				//mV
-	
-	OCR3B =0xFF;
-	
+	ICR3=0x320;	
+	OCR3B = 0x00;
     while (1){
 		switch(state){
 			case NORMAL_MODE:
-				if(cal_torque){
-					cli();
-					current = adc_read(CH_ADC0);
-					current -= 785;
-					if (current > 6520)
-					{
-						current = 0;
-					}
-					ampere = 7*current;
-					cal_torque = 0;
-					sei();
-				}
 				if (can_read_message_if_new(&rxFrame))
 				{
 					if(rxFrame.id == STEERINGWHEEL){
 						throttle_cmd = rxFrame.data[3];
-						setPoint_pwm = throttle_cmd*2.55;
+						setPoint_pwm = throttle_cmd*8;
 					}
 					if(rxFrame.id == ENCODER_ID){
 						rpm = (rxFrame.data[0] << 8);
@@ -107,6 +95,9 @@ int main(void)
 					}
 				}
 				OCR3B = setPoint_pwm;
+				amp = adc_read(CH_ADC3);
+				
+				printf("Amp: %u\n",amp);
 				break;
 				
 			case CC_MODE:
@@ -114,7 +105,6 @@ int main(void)
 				if (rxFrame.data[5] > 75){
 					cruise_speed++;
 					setPoint_rpm = setPoint_rpm + 45;
-					
 				}
 				if (rxFrame.data[5] < 25){
 					cruise_speed--;
@@ -132,42 +122,59 @@ int main(void)
 				break;
 				
 			case TORQUE_MODE:
-				current = adc_read(CH_ADC0);
-				printf("ADC: %u\n",current);
+				
 				break;
+				
 			case TEST_MODE:
 				if (can_read_message_if_new(&rxFrame))
 				{
-					if (rxFrame.id == ENCODER_ID){
-						rpm = (rxFrame.data[0] << 8);
-						rpm |= rxFrame.data[1];
-						rxFrame.id = NO_MSG;
-						newSample = 1;
+					if (rxFrame.id == STEERINGWHEEL){
+						throttle_cmd = rxFrame.data[3];
+						printf("Thrtl: %u\n", throttle_cmd);
+						OCR3B = 2.50*throttle_cmd;
 					}
 				}
+				
+				//current_sample(&cum_amp);
+				//current_samps += 1;
+				//printf("ADC: %u\n", current);
 				break;
 				
 			case BLANK:
-				//Timer test
 				break;
 		}
     }
 }
 
 ISR(TIMER1_COMPA_vect){
-	//Torque control goes here 10Hz
-	if (newSample){
-		uint16_t pwm_target = controller(&Speed, rpm, setPoint_rpm);
-		OCR3B = pwm_target;
-		newSample = 0;
-		rxFrame.id = NO_MSG;
-	}
+	///////////////////TORQUE CONTROL 10 Hz//////////////////////////
 	
-	count_torque +=1;
-	if (count_torque == 10){
-		// Speed Control goes here 1Hz
-		count_torque = 0;
+	amp = cum_amp/current_samps;
+	cum_amp = 0;
+	current_samps = 0;
+	//printf("AMP: %u\t",amp);
+	int32_t pwm_inc = controller_trq(&Torque,amp,setPoint_amp);
+	//printf("Out: %d\t",pwm_inc);
+	pwm_target = safe_addition(pwm_target, pwm_inc);
+	//OCR3B = pwm_target;
+	//printf("Trottle: %u\t",throttle_cmd);
+	//printf("OCR: %u\n",OCR3B);
+	
+	////////////////////////////////////////////////////////////
+	
+	count_speed +=1;
+	if (count_speed == 10){
+	//////////////////////SPEED CONTROL 1Hz/////////////////////
+	
+		if (newSample){
+			pwm_target = controller(&Speed, rpm, setPoint_rpm);
+			OCR3B = pwm_target;
+			newSample = 0;
+			rxFrame.id = NO_MSG;
+		}
+		count_speed = 0;
+	/////////////////////////////////////////////////////////////
 	}
-	//OCR3B = setPoint_pwm;
+
 	
 }
