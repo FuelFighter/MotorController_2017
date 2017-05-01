@@ -3,4 +3,4 @@
 	url = https://github.com/FuelFighter/UniversalModuleDrivers.git
 [submodule "MotorController_2017/UniversalModuleDrivers"]
 	path = MotorController_2017/UniversalModuleDrivers
-	url = https://github.com/FuelFighter/UniversalModuleDrivers.git
+	url = https://github.com/fuelfighter/UniversalModuleDrivers
