@@ -10,10 +10,10 @@
 #include <avr/io.h>
 #include <util/delay.h>
 #include <avr/interrupt.h>
+#include "pid.h"
 #include "controller.h"
 #include "UniversalModuleDrivers/usbdb.h"
 #include "UniversalModuleDrivers/pwm.h"
-#include "UniversalModuleDrivers/pid.h"
 #include "UniversalModuleDrivers/can.h"
 #include "UniversalModuleDrivers/adc.h"
 
@@ -60,8 +60,8 @@ static uint8_t current_samps = 0;
 static volatile uint8_t newSample = 0;
 static uint16_t nTimerInterrupts = 0;
 static uint32_t prev_adc_read = 0;
-static uint8_t can_status = 0b00000000; //(alive|currentoverload|etc|etc|etc|etc|etc|etc|)
-
+static uint8_t motor_status = 0b00000000; //(alive|currentoverload|etc|etc|etc|etc|etc|etc|)
+static uint8_t send_can = 0;
 
 void timer_init_ts(){
 	TCCR1B |= (1<<CS10)|(1<<CS11);
@@ -75,20 +75,27 @@ int main(void)
 {
 	printf("Running!\n");
 	cli();
-	pid_init_test(&Speed, 1, 1.0, 0.0, 1.0);
-	pid_init_test(&Current, 0.1, 0.07, 0.0001, 0.0000);
+	pid_init(&Speed, 1, 1.0, 0.0, 1.0);
+	pid_init(&Current, 0.1, 0.07, 0.0001, 0.0000);
 	usbdbg_init();
 	pwm_init();
 	can_init(0,0);
 	timer_init_ts();
 	adc_init();
-	txFrame.id = MOTOR_1_STATUS_CAN_ID;
-	
+	txFrame.id = MOTOR_1_STATUS_CAN_ID;	
 	sei();
 	//printf("EFF: %u\n", efficiency_area(2000,24,5.353));
 	
 	
     while (1){
+		if (send_can){
+			txFrame.data[0] = motor_status;
+			txFrame.data[1] = 0xFF|mamp;
+			txFrame.data[2] = (0xFF << 8)|mamp;
+			txFrame.data[3] = 0xFF|OCR3B;
+			txFrame.data[4] = (0xFF << 8)|OCR3B;
+			txFrame.data[5] = throttle_cmd;
+		}
 		switch(state){
 			case NORMAL_MODE:
 				if (can_read_message_if_new(&rxFrame))
@@ -156,15 +163,9 @@ int main(void)
 
 ISR(TIMER1_COMPA_vect){
 	///////////////////TORQUE CONTROL 10 Hz//////////////////////////
-	/*
-	printf("mamp: %u\t",mamp);
-	printf("sp_mamp: %u\t", setPoint_mamp);
-	printf("ctrl: %d\t ", controller_trq(&Current, mamp, setPoint_mamp));
-	printf("sp_mamp: %u \n", setPoint_mamp);
-	*/
+	send_can = 1;
 	uint16_t volt = (48*OCR3B)/ICR3;
-	uint8_t eff = efficiency_area(rpm, volt, mamp);
-	//printf("Eff: %u \t", eff);
+	//uint8_t eff = efficiency_area(rpm, volt, mamp);
 	int add = controller_trq(&Current, mamp, setPoint_mamp);
 	if ((OCR3B-add) > 0xFFF){
 		OCR3B = 0;

@@ -7,8 +7,8 @@
 
 #include <avr/io.h>
 #include "UniversalModuleDrivers/usbdb.h"
-#include "UniversalModuleDrivers/pid.h"
 #include "UniversalModuleDrivers/adc.h"
+#include "pid.h"
 
 #define RPMTO8BIT 0.051
 
@@ -19,8 +19,9 @@
 #define VCC 50
 #define V2PWM 0xFF/VCC
 
-int32_t controller(Pid_t *PID, uint16_t currentRpm, uint16_t setPoint){
-	int32_t output = pid_test(PID ,currentRpm, setPoint);	
+int32_t controller(Pid_t *PID, uint16_t currentRpm, uint16_t setPoint)
+{
+	int32_t output = pid(PID ,currentRpm, setPoint);	
 	
 	int32_t dutyCycle = output * RPMTO8BIT; 
 	
@@ -35,7 +36,7 @@ int32_t controller(Pid_t *PID, uint16_t currentRpm, uint16_t setPoint){
 }
 
 int32_t controller_trq(Pid_t *PID, uint16_t amp, uint16_t amp_sp){
-	int32_t out = pid_test(PID, amp, amp_sp);
+	int32_t out = pid(PID, amp, amp_sp);
 	//printf("Out: %u\n",out);
 	
 }
@@ -57,21 +58,3 @@ void current_sample(uint32_t *current_cumulative){
 	*current_cumulative += current_samp;
 }
 
-uint8_t safe_addition(uint16_t a,int32_t b){
-	if (b < 0){
-		//check for overflow 0->65538
-		if (a > (uint16_t)(a+b)){
-			a += b;
-			}else{
-			a = 0;
-		}
-		}else{
-		//check for overflow 65538->0
-		if(!(a+b > 0xFF)){
-			a += b;
-			}else{
-			a = 0xFF;
-		}
-	}
-	return a;
-}
