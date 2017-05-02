@@ -17,10 +17,7 @@
 #include "UniversalModuleDrivers/can.h"
 #include "UniversalModuleDrivers/adc.h"
 
-#define ENCODER_ID 544
-#define STEERINGWHEEL 0x020
-#define INTMAX_CURRENT 0x1FF
-#define NO_MSG 0xFFF
+#define STORM_SLETTMEG 1
 
 #define NORMAL_MODE 0
 #define CC_MODE 1
@@ -28,10 +25,11 @@
 #define TEST_MODE 0xFF
 #define BLANK 0xFE
 
-uint8_t state = TEST_MODE;
+uint8_t state = NORMAL;
 
 #define BIT2MAMP (32.23)
 #define TC (93.4)
+#define MAX_MAMP 2000;
 
 // Types
 CanMessage_t rxFrame;
@@ -100,20 +98,27 @@ int main(void)
 			case NORMAL_MODE:
 				if (can_read_message_if_new(&rxFrame))
 				{
-					if(rxFrame.id == STEERINGWHEEL){
+					if(rxFrame.id == STEERING_WHEEL_CAN_ID){
 						throttle_cmd = 100-rxFrame.data[3];
 						setPoint_pwm = throttle_cmd*8;
 					}
-					if(rxFrame.id == ENCODER_ID){
+					if(rxFrame.id == ENCODER_CAN_ID){
 						rpm = (rxFrame.data[0] << 8);
 						rpm |= rxFrame.data[1];
 					}
+					if(rxFrame.id == STORM_SLETTMEG){
+						mamp = (rxFrame.data[0] << 8);
+						mamp |= rxFrame.data[1];
+					}
+				}
+				if(mamp > MAX_MAMP){
+					
 				}
 				OCR3B = setPoint_pwm;
 				break;
 				
 			case CC_MODE:
-			if (rxFrame.id == STEERINGWHEEL){
+			if (rxFrame.id == STEERING_WHEEL_CAN_ID){
 				if (rxFrame.data[5] > 75){
 					cruise_speed++;
 					setPoint_rpm = setPoint_rpm + 45;
@@ -125,7 +130,7 @@ int main(void)
 			}
 				
 			
-			if(rxFrame.id == ENCODER_ID){
+			if(rxFrame.id == ENCODER_CAN_ID){
 				cli();
 				rpm = (rxFrame.data[0] << 8);
 				rpm |= rxFrame.data[1];
@@ -138,16 +143,18 @@ int main(void)
 				break;
 				
 			case TEST_MODE:
-				if (can_read_message_if_new(&rxFrame))
-				{
-					
-					if (rxFrame.id == STEERINGWHEEL){
+				if (can_read_message_if_new(&rxFrame)){
+					printf("ID: %u\n",rxFrame.id);
+					if (rxFrame.id == STEERING_WHEEL_CAN_ID){
 						throttle_cmd = 100-rxFrame.data[3];
 					}
-					
-					if(rxFrame.id == ENCODER_ID){
+					if(rxFrame.id == ENCODER_CAN_ID){
 						rpm = (rxFrame.data[0] << 8);
 						rpm |= rxFrame.data[1];
+					}
+					if (rxFrame.id == STORM_SLETTMEG){
+						mamp = (rxFrame.data[0] << 8);
+						mamp |= rxFrame.data[1];
 					}
 				}
 				
@@ -187,7 +194,6 @@ ISR(TIMER1_COMPA_vect){
 			pwm_target = controller(&Speed, rpm, setPoint_rpm);
 			OCR3B = pwm_target;
 			newSample = 0;
-			rxFrame.id = NO_MSG;
 		}
 		count_speed = 0;
 	/////////////////////////////////////////////////////////////
