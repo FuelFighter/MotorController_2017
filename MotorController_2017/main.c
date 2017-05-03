@@ -90,6 +90,8 @@ int main(void)
 			txFrame.data[3] = 0xFF|OCR3B;
 			txFrame.data[4] = (0xFF << 8)|OCR3B;
 			txFrame.data[5] = throttle_cmd;
+			can_send_message(&txFrame);
+			send_can = 0;
 		}
 		switch(state){
 			case NORMAL_MODE:
