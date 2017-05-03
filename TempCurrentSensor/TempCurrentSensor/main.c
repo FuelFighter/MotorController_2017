@@ -1,42 +1,56 @@
+	
 /*
- * TempCurrentSensor.c
+ * Encoder_Test_1603.c
  *
- * Created: 5/2/2017 7:18:37 PM
- * Author : Ole
+ * Created: 16.03.2017 19:24:56
+ * Author : Ultrawack
  */ 
 
-#include <avr/io.h>
-#include <avr/interrupt.h>
-#include "../../MotorController_2017/UniversalModuleDrivers/adc.h"
-#include "../../MotorController_2017/UniversalModuleDrivers/usbdb.h"
-#include "../../MotorController_2017/UniversalModuleDrivers/can.h"
-#include "../../MotorController_2017/UniversalModuleDrivers/timer.h"
+#define F_CPU 8000000UL
 
-#define BIT2MAMP (32.23)
+#include <avr/io.h>
+#include <util/delay.h>
+#include <stdlib.h>
+#include <string.h>
+#include <avr/interrupt.h>
+#include "usbdb.h"
+#include "can.h"
+#include "adc.h"
+
+
+
+
+static CanMessage_t canMessage;
+#define STROM 100
+#define LPC (0.1)
 
 int main(void)
 {
-    cli();
+	cli();
+
+	usbdbg_init();
+	can_init(0,0);
 	adc_init();
-	can_init();
-	timer_init();	
 	sei();
 	
-	CanMessage_t txFrame;
-	txFrame.id = 1;
-	txFrame.length = 2;
-	uint16_t adc_val = 0;
-	uint32_t mamp = 0;
+	canMessage.id = STROM;
+	canMessage.length = 2;
+	uint16_t mamp = 0;
+	uint16_t prev_mamp = 0;
 	
-	timer_start(TIMER0);
-	
-    while (1){
-		if (timer_elapsed_ms(10)){
-			txFrame.data[0] = ((0xFF << 8)|mamp);
-			txFrame.data[1] = 0xFF|mamp;
+	while (1) 
+    {
+		_delay_ms(50);
+		printf("ADC: %u\t", adc_read(CH_ADC0));
+		uint16_t temp_mamp = 512-adc_read(CH_ADC0);
+		if (temp_mamp > 1025){
+			temp_mamp = 0;
 		}
-		adc_val = adc_read(CH_ADC0);
-		mamp = BIT2MAMP*adc_val;
-    }
+		mamp = (1-LPC)*prev_mamp + LPC*temp_mamp;
+		canMessage.data[0] = (mamp >> 8);
+		canMessage.data[1] = mamp;
+		
+		printf("mamp: %u\n", mamp);
+		can_send_message(&canMessage);
+	}
 }
-

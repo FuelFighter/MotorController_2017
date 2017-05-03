@@ -91,7 +91,7 @@ int32_t pid(Pid_t *PID, uint16_t currentValue, uint16_t setpoint){
 	PID->derError = (PID->totError - PID->lastError)/(PID->timeStep);
 	int derGain = (PID->derError)*(PID->Kd);
 	PID->lastError = PID->totError;
-
+	/*
 	printf("totError: %d \t", PID->totError);
 	printf("IntError: %d \t", PID->intError);
 	printf("DerError: %d \t",PID->derError);
@@ -99,10 +99,10 @@ int32_t pid(Pid_t *PID, uint16_t currentValue, uint16_t setpoint){
 	printf("PropGain: %d \t", propGain);
 	printf("IntGain: %d \t", intGain);
 	printf("DerGain: %d \t", derGain);
-
+	*/
 	// Pid output
 	output = propGain + intGain + derGain;
-	printf("Out: %d \n", output);
+	//printf("Out: %d \n", output);
 	return output;
 }
 

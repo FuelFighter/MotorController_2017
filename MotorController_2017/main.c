@@ -17,7 +17,7 @@
 #include "UniversalModuleDrivers/can.h"
 #include "UniversalModuleDrivers/adc.h"
 
-#define STORM_SLETTMEG 1
+#define STROM 100
 
 #define NORMAL_MODE 0
 #define CC_MODE 1
@@ -25,11 +25,11 @@
 #define TEST_MODE 0xFF
 #define BLANK 0xFE
 
-uint8_t state = NORMAL;
+uint8_t state = NORMAL_MODE;
 
 #define BIT2MAMP (32.23)
 #define TC (93.4)
-#define MAX_MAMP 2000;
+#define MAX_MAMP 2000
 
 // Types
 CanMessage_t rxFrame;
@@ -40,9 +40,7 @@ Pid_t Current;
 // Physical values
 
 static uint16_t rpm = 0;
-static uint32_t cum_amp = 0;
 static uint32_t mamp = 0;
-static uint32_t trq = 0;
 
 // Setpoints and commands
 static uint16_t setPoint_rpm = 2000;
@@ -54,12 +52,12 @@ static uint16_t pwm_target = 0;
 
 // Control values
 static uint8_t count_speed = 0;
-static uint8_t current_samps = 0;
 static volatile uint8_t newSample = 0;
 static uint16_t nTimerInterrupts = 0;
 static uint32_t prev_adc_read = 0;
 static uint8_t motor_status = 0b00000000; //(alive|currentoverload|etc|etc|etc|etc|etc|etc|)
 static uint8_t send_can = 0;
+static uint8_t overload = 1;
 
 void timer_init_ts(){
 	TCCR1B |= (1<<CS10)|(1<<CS11);
@@ -71,7 +69,6 @@ void timer_init_ts(){
 
 int main(void)	
 {
-	printf("Running!\n");
 	cli();
 	pid_init(&Speed, 1, 1.0, 0.0, 1.0);
 	pid_init(&Current, 0.1, 0.07, 0.0001, 0.0000);
@@ -81,11 +78,11 @@ int main(void)
 	timer_init_ts();
 	adc_init();
 	txFrame.id = MOTOR_1_STATUS_CAN_ID;	
+	txFrame.length = 6;
 	sei();
-	//printf("EFF: %u\n", efficiency_area(2000,24,5.353));
 	
 	
-    while (1){
+    while (overload){
 		if (send_can){
 			txFrame.data[0] = motor_status;
 			txFrame.data[1] = 0xFF|mamp;
@@ -98,23 +95,27 @@ int main(void)
 			case NORMAL_MODE:
 				if (can_read_message_if_new(&rxFrame))
 				{
+					//printf("ID: %u \n",rxFrame.id);
 					if(rxFrame.id == STEERING_WHEEL_CAN_ID){
-						throttle_cmd = 100-rxFrame.data[3];
-						setPoint_pwm = throttle_cmd*8;
+						throttle_cmd = rxFrame.data[3];
+						printf("Thrl: %u\n", throttle_cmd);
 					}
 					if(rxFrame.id == ENCODER_CAN_ID){
 						rpm = (rxFrame.data[0] << 8);
 						rpm |= rxFrame.data[1];
 					}
-					if(rxFrame.id == STORM_SLETTMEG){
+					if(rxFrame.id == STROM){
 						mamp = (rxFrame.data[0] << 8);
 						mamp |= rxFrame.data[1];
+						printf("MAMP: %x\n", mamp);
 					}
 				}
+				
 				if(mamp > MAX_MAMP){
-					
+					printf("OVERCURRENT");
 				}
-				OCR3B = setPoint_pwm;
+				OCR3B = throttle_cmd*8;
+				
 				break;
 				
 			case CC_MODE:
@@ -141,24 +142,25 @@ int main(void)
 			case TORQUE_MODE:
 				
 				break;
-				
+	
 			case TEST_MODE:
 				if (can_read_message_if_new(&rxFrame)){
+					CanMessage_t received_rxFrame = rxFrame;
 					printf("ID: %u\n",rxFrame.id);
-					if (rxFrame.id == STEERING_WHEEL_CAN_ID){
-						throttle_cmd = 100-rxFrame.data[3];
+					if (received_rxFrame.id == STEERING_WHEEL_CAN_ID){
+						throttle_cmd = 100-received_rxFrame.data[3];
 					}
-					if(rxFrame.id == ENCODER_CAN_ID){
-						rpm = (rxFrame.data[0] << 8);
-						rpm |= rxFrame.data[1];
+					if(received_rxFrame.id == ENCODER_CAN_ID){
+						rpm = (received_rxFrame.data[0] << 8);
+						rpm |= received_rxFrame.data[1];
 					}
-					if (rxFrame.id == STORM_SLETTMEG){
-						mamp = (rxFrame.data[0] << 8);
-						mamp |= rxFrame.data[1];
+					if (received_rxFrame.id == STROM){
+						mamp = (received_rxFrame.data[0] << 8);
+						mamp |= received_rxFrame.data[1];
 					}
 				}
 				
-				OCR3B = throttle_cmd*8;
+				//OCR3B = throttle_cmd*8;
 				break;
 				
 			case BLANK:
@@ -171,8 +173,6 @@ int main(void)
 ISR(TIMER1_COMPA_vect){
 	///////////////////TORQUE CONTROL 10 Hz//////////////////////////
 	send_can = 1;
-	uint16_t volt = (48*OCR3B)/ICR3;
-	//uint8_t eff = efficiency_area(rpm, volt, mamp);
 	int add = controller_trq(&Current, mamp, setPoint_mamp);
 	if ((OCR3B-add) > 0xFFF){
 		OCR3B = 0;
@@ -182,14 +182,11 @@ ISR(TIMER1_COMPA_vect){
 	OCR3B -= add;
 	}
 	
-	//printf("OCR: %u", OCR3B);
-	
 	////////////////////////////////////////////////////////////
 	
 	count_speed +=1;
 	if (count_speed == 10){
 	//////////////////////SPEED CONTROL 1Hz/////////////////////
-		//printf("rpm: %u\n", rpm);
 		if (newSample){
 			pwm_target = controller(&Speed, rpm, setPoint_rpm);
 			OCR3B = pwm_target;
@@ -233,7 +230,7 @@ ISR(TIMER3_COMPA_vect)
 		//printf("ADC: %u \n", amp_adc);
 		prev_adc_read = amp_adc;
 		mamp = BIT2MAMP*amp_adc;
-		printf("Amp: %u \n", mamp);
+		//printf("Amp: %u \n", mamp);
 		
 		nTimerInterrupts = 0;
 	}
