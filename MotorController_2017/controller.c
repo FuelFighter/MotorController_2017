@@ -38,7 +38,7 @@ int32_t controller(Pid_t *PID, uint16_t currentRpm, uint16_t setPoint)
 int32_t controller_trq(Pid_t *PID, uint16_t amp, uint16_t amp_sp){
 	int32_t out = pid(PID, amp, amp_sp);
 	//printf("Out: %u\n",out);
-	
+	return out;
 }
 
 void current_saturation(uint16_t *rpm, uint16_t *pwm){
@@ -48,13 +48,5 @@ void current_saturation(uint16_t *rpm, uint16_t *pwm){
 	if(*pwm > pwmMax){
 		*pwm = pwmMax;
 	}
-}
-
-void current_sample(uint32_t *current_cumulative){
-	uint16_t current_samp = adc_read(CH_ADC0)-777;
-	if (current_samp > 65530){
-		current_samp = 0;
-	}
-	*current_cumulative += current_samp;
 }
 

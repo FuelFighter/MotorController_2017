@@ -30,6 +30,8 @@ uint8_t state = NORMAL_MODE;
 #define BIT2MAMP (32.23)
 #define TC (93.4)
 #define MAX_MAMP 2000
+#define  MAX_RPM 2950
+#define RPM_LOW 200
 
 // Types
 CanMessage_t rxFrame;
@@ -38,7 +40,6 @@ Pid_t Speed;
 Pid_t Current;
 
 // Physical values
-
 static uint16_t rpm = 0;
 static uint32_t mamp = 0;
 
@@ -58,6 +59,7 @@ static uint32_t prev_adc_read = 0;
 static uint8_t motor_status = 0b00000000; //(alive|currentoverload|etc|etc|etc|etc|etc|etc|)
 static uint8_t send_can = 0;
 static uint8_t overload = 1;
+static float pwm_top = 0x64;
 
 void timer_init_ts(){
 	TCCR1B |= (1<<CS10)|(1<<CS11);
@@ -83,6 +85,7 @@ int main(void)
 	
 	
     while (overload){
+		//printf("HEI");
 		if (send_can){
 			txFrame.data[0] = motor_status;
 			txFrame.data[1] = 0xFF|mamp;
@@ -93,30 +96,28 @@ int main(void)
 			can_send_message(&txFrame);
 			send_can = 0;
 		}
+		
 		switch(state){
 			case NORMAL_MODE:
-				if (can_read_message_if_new(&rxFrame))
-				{
-					//printf("ID: %u \n",rxFrame.id);
+				
+				if (can_read_message_if_new(&rxFrame)){
 					if(rxFrame.id == STEERING_WHEEL_CAN_ID){
 						throttle_cmd = rxFrame.data[3];
-						printf("Thrl: %u\n", throttle_cmd);
+						//printf("Thrl: %u\n", throttle_cmd);
 					}
 					if(rxFrame.id == ENCODER_CAN_ID){
 						rpm = (rxFrame.data[0] << 8);
 						rpm |= rxFrame.data[1];
+						//printf("\tRPM: %u\n", rpm);
 					}
 					if(rxFrame.id == STROM){
 						mamp = (rxFrame.data[0] << 8);
 						mamp |= rxFrame.data[1];
-						printf("MAMP: %x\n", mamp);
+						//printf("\t\tMAMP: %x\t\t\n", mamp);
 					}
 				}
 				
-				if(mamp > MAX_MAMP){
-					printf("OVERCURRENT");
-				}
-				OCR3B = throttle_cmd*8;
+				OCR3B = throttle_cmd*(RPM_LOW + 0.25*rpm)*0.01;
 				
 				break;
 				
@@ -145,24 +146,8 @@ int main(void)
 				
 				break;
 	
-			case TEST_MODE:
-				if (can_read_message_if_new(&rxFrame)){
-					CanMessage_t received_rxFrame = rxFrame;
-					printf("ID: %u\n",rxFrame.id);
-					if (received_rxFrame.id == STEERING_WHEEL_CAN_ID){
-						throttle_cmd = 100-received_rxFrame.data[3];
-					}
-					if(received_rxFrame.id == ENCODER_CAN_ID){
-						rpm = (received_rxFrame.data[0] << 8);
-						rpm |= received_rxFrame.data[1];
-					}
-					if (received_rxFrame.id == STROM){
-						mamp = (received_rxFrame.data[0] << 8);
-						mamp |= received_rxFrame.data[1];
-					}
-				}
+			case TEST_MODE:				
 				
-				//OCR3B = throttle_cmd*8;
 				break;
 				
 			case BLANK:
@@ -183,7 +168,7 @@ ISR(TIMER1_COMPA_vect){
 	}else{
 	OCR3B -= add;
 	}
-	
+	printf("RPM: %u \t MAMP: %u \t THRL: %u \t PWM_TOP: %u \n", rpm, mamp, throttle_cmd, pwm_top);
 	////////////////////////////////////////////////////////////
 	
 	count_speed +=1;

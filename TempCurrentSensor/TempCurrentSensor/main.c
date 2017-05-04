@@ -22,12 +22,11 @@
 
 static CanMessage_t canMessage;
 #define STROM 100
-#define LPC (0.1)
+#define LP_CONSTANT (0.1)
 
 int main(void)
 {
 	cli();
-
 	usbdbg_init();
 	can_init(0,0);
 	adc_init();
@@ -40,13 +39,13 @@ int main(void)
 	
 	while (1) 
     {
-		_delay_ms(50);
+		_delay_ms(50);									// 20hz
 		printf("ADC: %u\t", adc_read(CH_ADC0));
 		uint16_t temp_mamp = 512-adc_read(CH_ADC0);
 		if (temp_mamp > 1025){
 			temp_mamp = 0;
 		}
-		mamp = (1-LPC)*prev_mamp + LPC*temp_mamp;
+		mamp = (1-LP_CONSTANT)*prev_mamp + LP_CONSTANT*temp_mamp;
 		canMessage.data[0] = (mamp >> 8);
 		canMessage.data[1] = mamp;
 		
