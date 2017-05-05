@@ -22,7 +22,8 @@
 
 static CanMessage_t canMessage;
 #define STROM 100
-#define LP_CONSTANT (0.1)
+#define LPC (0.1)
+#define BIT2MAMP (32.23)
 
 int main(void)
 {
@@ -35,21 +36,25 @@ int main(void)
 	canMessage.id = STROM;
 	canMessage.length = 2;
 	uint16_t mamp = 0;
-	uint16_t prev_mamp = 0;
+	uint16_t adc_val = 0;
+	uint16_t prev_adc_val = 0;
 	
 	while (1) 
     {
 		_delay_ms(50);									// 20hz
 		printf("ADC: %u\t", adc_read(CH_ADC0));
-		uint16_t temp_mamp = 512-adc_read(CH_ADC0);
-		if (temp_mamp > 1025){
-			temp_mamp = 0;
+		uint16_t adc_val = 512-adc_read(CH_ADC0);
+		if (adc_val > 1025){
+			adc_val = 0;
 		}
-		mamp = (1-LP_CONSTANT)*prev_mamp + LP_CONSTANT*temp_mamp;
+		adc_val = LPC*adc_val + (1-LPC)*prev_adc_val;
+		prev_adc_val = adc_val;
+		mamp = BIT2MAMP*adc_val;
+		
 		canMessage.data[0] = (mamp >> 8);
 		canMessage.data[1] = mamp;
 		
-		printf("mamp: %u\n", mamp);
+		printf("mamp: %u \t MSB: %x \t LSB: %x \n", mamp, canMessage.data[0], canMessage.data[1]);
 		can_send_message(&canMessage);
 	}
 }

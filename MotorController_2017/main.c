@@ -31,7 +31,7 @@ uint8_t state = NORMAL_MODE;
 #define TC (93.4)
 #define MAX_MAMP 2000
 #define  MAX_RPM 2950
-#define RPM_LOW 200
+#define PWM_MAX_DUTY_CYCLE_AT_0_RPM 200
 
 // Types
 CanMessage_t rxFrame;
@@ -60,6 +60,7 @@ static uint8_t motor_status = 0b00000000; //(alive|currentoverload|etc|etc|etc|e
 static uint8_t send_can = 0;
 static uint8_t overload = 1;
 static float pwm_top = 0x64;
+static uint8_t BMS_status;
 
 void timer_init_ts(){
 	TCCR1B |= (1<<CS10)|(1<<CS11);
@@ -68,6 +69,14 @@ void timer_init_ts(){
 	TIMSK1 |= (1<<OCIE1A);
 	OCR1A = 12500 - 1;
 }
+
+/*
+void handle_can_msg(CanMessage_t *can_msg){
+	if(can_read_message_if_new(can_msg)){
+		
+	}
+}
+*/
 
 int main(void)	
 {
@@ -80,27 +89,36 @@ int main(void)
 	timer_init_ts();
 	adc_init();
 	txFrame.id = MOTOR_1_STATUS_CAN_ID;	
-	txFrame.length = 6;
+	txFrame.length = 7;
 	sei();
+	
+	DDRB |= (1 << PB4);
 	
 	
     while (overload){
+		
 		//printf("HEI");
 		if (send_can){
 			txFrame.data[0] = motor_status;
-			txFrame.data[1] = 0xFF|mamp;
-			txFrame.data[2] = (0xFF << 8)|mamp;
-			txFrame.data[3] = 0xFF|OCR3B;
-			txFrame.data[4] = (0xFF << 8)|OCR3B;
+			txFrame.data[1] = mamp << 8;
+			txFrame.data[2] = mamp & 0x00FF;
+			txFrame.data[3] = OCR3B << 8;
+			txFrame.data[4] = OCR3B & 0x00FF;
 			txFrame.data[5] = throttle_cmd;
+			txFrame.data[6] = BMS_status;
 			can_send_message(&txFrame);
 			send_can = 0;
 		}
+		
+		
 		
 		switch(state){
 			case NORMAL_MODE:
 				
 				if (can_read_message_if_new(&rxFrame)){
+					if (rxFrame.id == BMS_STATUS_CAN_ID){
+						BMS_status = rxFrame.data[0];
+					}
 					if(rxFrame.id == STEERING_WHEEL_CAN_ID){
 						throttle_cmd = rxFrame.data[3];
 						//printf("Thrl: %u\n", throttle_cmd);
@@ -113,12 +131,15 @@ int main(void)
 					if(rxFrame.id == STROM){
 						mamp = (rxFrame.data[0] << 8);
 						mamp |= rxFrame.data[1];
-						//printf("\t\tMAMP: %x\t\t\n", mamp);
+						printf("\t\tMAMP: %u\t\t\n", mamp);
 					}
 				}
-				
-				OCR3B = throttle_cmd*(RPM_LOW + 0.25*rpm)*0.01;
-				
+				if(BMS_status == 0x2){
+					PORTB &= ~(1 << PB4);
+					OCR3B = throttle_cmd*()
+				}else{
+					PORTB |= (1 << PB4);
+				}
 				break;
 				
 			case CC_MODE:
@@ -168,7 +189,7 @@ ISR(TIMER1_COMPA_vect){
 	}else{
 	OCR3B -= add;
 	}
-	printf("RPM: %u \t MAMP: %u \t THRL: %u \t PWM_TOP: %u \n", rpm, mamp, throttle_cmd, pwm_top);
+	//printf("RPM: %u \t MAMP: %u \t THRL: %u \t PWM_TOP: %u \n", rpm, mamp, throttle_cmd, pwm_top);
 	////////////////////////////////////////////////////////////
 	
 	count_speed +=1;
@@ -216,7 +237,7 @@ ISR(TIMER3_COMPA_vect)
 		//printf("Prev: %u \t\t",prev_adc_read);
 		//printf("ADC: %u \n", amp_adc);
 		prev_adc_read = amp_adc;
-		mamp = BIT2MAMP*amp_adc;
+		//mamp = BIT2MAMP*amp_adc;
 		//printf("Amp: %u \n", mamp);
 		
 		nTimerInterrupts = 0;
