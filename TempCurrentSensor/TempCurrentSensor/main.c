@@ -20,8 +20,10 @@
 
 
 
-static CanMessage_t canMessage;
-#define STROM 100
+static CanMessage_t msg_M_1;
+static CanMessage_t msg_M_2;
+#define CURRENT_M_1 100
+#define CURRENT_M_2 101;
 #define LPC (0.1)
 #define BIT2MAMP (32.23)
 
@@ -33,28 +35,41 @@ int main(void)
 	adc_init();
 	sei();
 	
-	canMessage.id = STROM;
-	canMessage.length = 2;
-	uint16_t mamp = 0;
-	uint16_t adc_val = 0;
-	uint16_t prev_adc_val = 0;
+	msg_M_1.id = CURRENT_M_1;
+	msg_M_2.id = CURRENT_M_2;
+	msg_M_1.length = 2;
+	msg_M_2.length = 2;
+	uint16_t mamp1 = 0;
+	uint16_t mamp2 = 0;
+	uint16_t adc_m1_ch0 = 0;
+	uint16_t adc_m2_ch1 = 0;
+	uint16_t prev_adc_m1_ch0 = 0;
+	uint16_t prev_adc_m2_ch1 = 0;
 	
 	while (1) 
     {
 		_delay_ms(50);									// 20hz
-		printf("ADC: %u\t", adc_read(CH_ADC0));
-		uint16_t adc_val = 512-adc_read(CH_ADC0);
-		if (adc_val > 1025){
-			adc_val = 0;
+		
+		uint16_t temp_adc_m1_ch0 = 512 - adc_read(CH_ADC0);
+		uint16_t temp_adc_m2_ch1 = 512 - adc_read(CH_ADC1);
+		if(temp_adc_m1_ch0 > 1024){
+			temp_adc_m1_ch0 = 0;
 		}
-		adc_val = LPC*adc_val + (1-LPC)*prev_adc_val;
-		prev_adc_val = adc_val;
-		mamp = BIT2MAMP*adc_val;
+		if(temp_adc_m2_ch1 > 1024){
+			temp_adc_m2_ch1 = 0;
+		}
+		adc_m1_ch0 = LPC*temp_adc_m1_ch0 + (1-LPC)*prev_adc_m1_ch0;
+		adc_m2_ch1 = LPC*temp_adc_m2_ch1 + (1-LPC)*prev_adc_m2_ch1;
 		
-		canMessage.data[0] = (mamp >> 8);
-		canMessage.data[1] = mamp;
+		mamp1 = BIT2MAMP*adc_m1_ch0;
+		mamp2 = BIT2MAMP*adc_m2_ch1;
 		
-		printf("mamp: %u \t MSB: %x \t LSB: %x \n", mamp, canMessage.data[0], canMessage.data[1]);
-		can_send_message(&canMessage);
+		msg_M_1.data[0] = (mamp1 >> 8);
+		msg_M_1.data[1] = mamp1;
+		msg_M_2.data[0] = (mamp2 >> 8);
+		msg_M_2.data[1] = mamp2;
+		
+		can_send_message(&msg_M_1);
+		can_send_message(&msg_M_2);
 	}
 }
