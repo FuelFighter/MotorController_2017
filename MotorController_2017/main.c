@@ -30,8 +30,10 @@ uint8_t state = NORMAL_MODE;
 #define BIT2MAMP (32.23)
 #define TC (93.4)
 #define MAX_MAMP 2000
-#define  MAX_RPM 2950
-#define PWM_MAX_DUTY_CYCLE_AT_0_RPM 200
+#define  MAX_RPM 4500
+#define PWM_MAX_DUTY_CYCLE_AT_0_RPM 100
+#define PWM_MAX_SCALING_RATIO (float) (ICR3-PWM_MAX_DUTY_CYCLE_AT_0_RPM)/MAX_RPM
+
 
 // Types
 CanMessage_t rxFrame;
@@ -50,6 +52,7 @@ static uint16_t setPoint_mamp = 0;
 static uint8_t cruise_speed = 0;
 static uint8_t throttle_cmd = 0;
 static uint16_t pwm_target = 0;
+static uint16_t duty_setpoint = 0;
 
 // Control values
 static uint8_t count_speed = 0;
@@ -94,9 +97,8 @@ int main(void)
 	
 	DDRB |= (1 << PB4);
 	
-	
     while (overload){
-		
+		printf("RATIO: %u\n",PWM_MAX_SCALING_RATIO);
 		//printf("HEI");
 		if (send_can){
 			txFrame.data[0] = motor_status;
@@ -131,12 +133,18 @@ int main(void)
 					if(rxFrame.id == STROM){
 						mamp = (rxFrame.data[0] << 8);
 						mamp |= rxFrame.data[1];
-						printf("\t\tMAMP: %u\t\t\n", mamp);
+						//printf("\t\tMAMP: %u\t\t\n", mamp);
 					}
 				}
 				if(BMS_status == 0x2){
 					PORTB &= ~(1 << PB4);
-					OCR3B = throttle_cmd*()
+					duty_setpoint = throttle_cmd*(PWM_MAX_DUTY_CYCLE_AT_0_RPM + PWM_MAX_SCALING_RATIO*rpm)*0.01;
+					//printf("PWM: %u\t RPM: %u \n ",duty_setpoint, rpm);
+					if (duty_setpoint > 719){
+						OCR3B = 719;
+					}else{
+						OCR3B = duty_setpoint;
+					}
 				}else{
 					PORTB |= (1 << PB4);
 				}
