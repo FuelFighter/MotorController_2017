@@ -17,7 +17,7 @@
 #include "UniversalModuleDrivers/can.h"
 #include "UniversalModuleDrivers/adc.h"
 
-#define STROM 100
+#define CURRENT_M_1 100
 
 #define NORMAL_MODE 0
 #define CC_MODE 1
@@ -30,8 +30,8 @@ uint8_t state = NORMAL_MODE;
 #define BIT2MAMP (32.23)
 #define TC (93.4)
 #define MAX_MAMP 2000
-#define  MAX_RPM 4500
-#define PWM_MAX_DUTY_CYCLE_AT_0_RPM 100
+#define MAX_RPM 4500
+#define PWM_MAX_DUTY_CYCLE_AT_0_RPM 8
 #define PWM_MAX_SCALING_RATIO (float) (ICR3-PWM_MAX_DUTY_CYCLE_AT_0_RPM)/MAX_RPM
 
 
@@ -59,11 +59,11 @@ static uint8_t count_speed = 0;
 static volatile uint8_t newSample = 0;
 static uint16_t nTimerInterrupts = 0;
 static uint32_t prev_adc_read = 0;
-static uint8_t motor_status = 0b00000000; //(alive|currentoverload|etc|etc|etc|etc|etc|etc|)
+static uint8_t motor_status = 0b00000000; //(etc|etc|etc|etc|etc|etc|overload|alive|)
 static uint8_t send_can = 0;
-static uint8_t overload = 1;
-static float pwm_top = 0x64;
+static uint8_t overload = 0;
 static uint8_t BMS_status;
+static uint8_t restart_overload = 0;
 
 void timer_init_ts(){
 	TCCR1B |= (1<<CS10)|(1<<CS11);
@@ -97,8 +97,8 @@ int main(void)
 	
 	DDRB |= (1 << PB4);
 	
-    while (overload){
-		printf("RATIO: %u\n",PWM_MAX_SCALING_RATIO);
+    while (1){
+		//printf("RATIO: %4.2f\n",PWM_MAX_SCALING_RATIO);
 		//printf("HEI");
 		if (send_can){
 			txFrame.data[0] = motor_status;
@@ -124,28 +124,50 @@ int main(void)
 					if(rxFrame.id == STEERING_WHEEL_CAN_ID){
 						throttle_cmd = rxFrame.data[3];
 						//printf("Thrl: %u\n", throttle_cmd);
+						if (overload){
+							//listen for restart
+							restart_overload = rxFrame.data[1];
+							printf("JoyButton: %u \n", restart_overload);
+						}
 					}
 					if(rxFrame.id == ENCODER_CAN_ID){
 						rpm = (rxFrame.data[0] << 8);
 						rpm |= rxFrame.data[1];
 						//printf("\tRPM: %u\n", rpm);
 					}
-					if(rxFrame.id == STROM){
+					if(rxFrame.id == CURRENT_M_1){
 						mamp = (rxFrame.data[0] << 8);
+						//printf("mamp bf: %u\n", mamp);
 						mamp |= rxFrame.data[1];
 						//printf("\t\tMAMP: %u\t\t\n", mamp);
+						if(mamp > 1000){
+							overload = 1;
+						}
 					}
 				}
 				if(BMS_status == 0x2){
-					PORTB &= ~(1 << PB4);
-					duty_setpoint = throttle_cmd*(PWM_MAX_DUTY_CYCLE_AT_0_RPM + PWM_MAX_SCALING_RATIO*rpm)*0.01;
-					//printf("PWM: %u\t RPM: %u \n ",duty_setpoint, rpm);
-					if (duty_setpoint > 719){
-						OCR3B = 719;
+					if (overload){
+						//handle overload
+						OCR3B = 0;
+						motor_status |= 1;
+						if(restart_overload){
+							overload = 0;
+							restart_overload = 0;
+						}
 					}else{
-						OCR3B = duty_setpoint;
+						PORTB &= ~(1 << PB4);
+						duty_setpoint = throttle_cmd*(PWM_MAX_DUTY_CYCLE_AT_0_RPM + PWM_MAX_SCALING_RATIO*rpm)*0.01;
+						//printf("PWM: %u\t RPM: %u \n ",duty_setpoint, rpm);
+						if (duty_setpoint > 719){
+							OCR3B = 719;
+							}else{
+							OCR3B = duty_setpoint;
+						}
 					}
+
+					
 				}else{
+					//turn off DCDC to precharge
 					PORTB |= (1 << PB4);
 				}
 				break;
@@ -197,7 +219,6 @@ ISR(TIMER1_COMPA_vect){
 	}else{
 	OCR3B -= add;
 	}
-	//printf("RPM: %u \t MAMP: %u \t THRL: %u \t PWM_TOP: %u \n", rpm, mamp, throttle_cmd, pwm_top);
 	////////////////////////////////////////////////////////////
 	
 	count_speed +=1;

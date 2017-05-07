@@ -58,14 +58,19 @@ int main(void)
 		if(temp_adc_m2_ch1 > 1024){
 			temp_adc_m2_ch1 = 0;
 		}
+		//printf("ADC1: %u \t", temp_adc_m1_ch0);
 		adc_m1_ch0 = LPC*temp_adc_m1_ch0 + (1-LPC)*prev_adc_m1_ch0;
 		adc_m2_ch1 = LPC*temp_adc_m2_ch1 + (1-LPC)*prev_adc_m2_ch1;
+		prev_adc_m1_ch0 = adc_m1_ch0;
+		prev_adc_m2_ch1 = adc_m2_ch1;
 		
 		mamp1 = BIT2MAMP*adc_m1_ch0;
 		mamp2 = BIT2MAMP*adc_m2_ch1;
+		//printf("mamp1 = %u , \t mamp2 = %u \n", mamp1, mamp2);
 		
 		msg_M_1.data[0] = (mamp1 >> 8);
 		msg_M_1.data[1] = mamp1;
+		
 		msg_M_2.data[0] = (mamp2 >> 8);
 		msg_M_2.data[1] = mamp2;
 		
