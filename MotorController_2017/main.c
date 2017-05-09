@@ -16,24 +16,13 @@
 #include "UniversalModuleDrivers/pwm.h"
 #include "UniversalModuleDrivers/can.h"
 #include "UniversalModuleDrivers/adc.h"
+#include "motor_controller_selection.h"
 
-#define CURRENT_M_1 100
-
-#define NORMAL_MODE 0
-#define CC_MODE 1
-#define TORQUE_MODE 2
-#define TEST_MODE 0xFF
-#define BLANK 0xFE
+// Change Motor in motor_controller_selection.h
+#define CURRENT_M   CURRENT_CAN_ID_SELECTION(100, 101)
+#define ENC			ENCODER_READER_SELECTION(0,2)
 
 uint8_t state = NORMAL_MODE;
-
-#define BIT2MAMP (32.23)
-#define TC (93.4)
-#define MAX_MAMP 2000
-#define MAX_RPM 4500
-#define PWM_MAX_DUTY_CYCLE_AT_0_RPM 8
-#define PWM_MAX_SCALING_RATIO (float) (ICR3-PWM_MAX_DUTY_CYCLE_AT_0_RPM)/MAX_RPM
-
 
 // Types
 CanMessage_t rxFrame;
@@ -73,14 +62,6 @@ void timer_init_ts(){
 	OCR1A = 12500 - 1;
 }
 
-/*
-void handle_can_msg(CanMessage_t *can_msg){
-	if(can_read_message_if_new(can_msg)){
-		
-	}
-}
-*/
-
 int main(void)	
 {
 	cli();
@@ -95,11 +76,10 @@ int main(void)
 	txFrame.length = 7;
 	sei();
 	
+	// Output pin to turn off DCDC
 	DDRB |= (1 << PB4);
 	
     while (1){
-		//printf("RATIO: %4.2f\n",PWM_MAX_SCALING_RATIO);
-		//printf("HEI");
 		if (send_can){
 			txFrame.data[0] = motor_status;
 			txFrame.data[1] = mamp << 8;
@@ -111,35 +91,29 @@ int main(void)
 			can_send_message(&txFrame);
 			send_can = 0;
 		}
-		
-		
-		
+				
 		switch(state){
 			case NORMAL_MODE:
-				
 				if (can_read_message_if_new(&rxFrame)){
+					
 					if (rxFrame.id == BMS_STATUS_CAN_ID){
 						BMS_status = rxFrame.data[0];
 					}
+					
 					if(rxFrame.id == STEERING_WHEEL_CAN_ID){
 						throttle_cmd = rxFrame.data[3];
-						//printf("Thrl: %u\n", throttle_cmd);
 						if (overload){
-							//listen for restart
+							//listen for restart (Joystick Button)
 							restart_overload = rxFrame.data[1];
-							printf("JoyButton: %u \n", restart_overload);
 						}
 					}
 					if(rxFrame.id == ENCODER_CAN_ID){
-						rpm = (rxFrame.data[0] << 8);
-						rpm |= rxFrame.data[1];
-						//printf("\tRPM: %u\n", rpm);
+						rpm = (rxFrame.data[ENC] << 8);
+						rpm |= rxFrame.data[ENC+1];
 					}
-					if(rxFrame.id == CURRENT_M_1){
+					if(rxFrame.id == CURRENT_M){
 						mamp = (rxFrame.data[0] << 8);
-						//printf("mamp bf: %u\n", mamp);
 						mamp |= rxFrame.data[1];
-						//printf("\t\tMAMP: %u\t\t\n", mamp);
 						if(mamp > 1000){
 							overload = 1;
 						}
@@ -157,7 +131,6 @@ int main(void)
 					}else{
 						PORTB &= ~(1 << PB4);
 						duty_setpoint = throttle_cmd*(PWM_MAX_DUTY_CYCLE_AT_0_RPM + PWM_MAX_SCALING_RATIO*rpm)*0.01;
-						//printf("PWM: %u\t RPM: %u \n ",duty_setpoint, rpm);
 						if (duty_setpoint > 719){
 							OCR3B = 719;
 							}else{
@@ -233,19 +206,9 @@ ISR(TIMER1_COMPA_vect){
 	/////////////////////////////////////////////////////////////
 	}
 }
-/*
-ISR(TIMER3_OVF_vect)
-{
-	if (nTimerInterrupts % 200 == 0)
-	{
-		_delay_us(10);
-		mamp = adc_read(CH_ADC3);
-		printf("Amp: %u \r\n", mamp);
-		nTimerInterrupts=0;
-	}
-	nTimerInterrupts++;
-}
-*/
+
+
+/* IMPLEMENT THIS TO NEW PCB
 ISR(TIMER3_COMPA_vect)
 {
 	if (nTimerInterrupts % 100== 0){
@@ -274,3 +237,4 @@ ISR(TIMER3_COMPA_vect)
 	nTimerInterrupts++;
 }
 
+*/
