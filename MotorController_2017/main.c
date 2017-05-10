@@ -19,8 +19,8 @@
 #include "motor_controller_selection.h"
 
 // Change Motor in motor_controller_selection.h
-#define CURRENT_M   CURRENT_CAN_ID_SELECTION(100, 101)
-#define ENC			ENCODER_READER_SELECTION(0,2)
+
+
 
 uint8_t state = NORMAL_MODE;
 
@@ -82,9 +82,9 @@ int main(void)
     while (1){
 		if (send_can){
 			txFrame.data[0] = motor_status;
-			txFrame.data[1] = mamp << 8;
+			txFrame.data[1] = mamp >> 8;
 			txFrame.data[2] = mamp & 0x00FF;
-			txFrame.data[3] = OCR3B << 8;
+			txFrame.data[3] = OCR3B >> 8;
 			txFrame.data[4] = OCR3B & 0x00FF;
 			txFrame.data[5] = throttle_cmd;
 			txFrame.data[6] = BMS_status;
