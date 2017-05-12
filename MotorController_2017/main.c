@@ -22,7 +22,8 @@
 
 
 
-uint8_t state = NORMAL_MODE;
+uint8_t mode = NORMAL_MODE;
+uint8_t state = IDLE;
 
 // Types
 CanMessage_t rxFrame;
@@ -31,7 +32,7 @@ Pid_t Speed;
 Pid_t Current;
 
 // Physical values
-static uint16_t rpm = 0;
+
 static uint32_t mamp = 0;
 
 // Setpoints and commands
@@ -39,7 +40,6 @@ static uint16_t setPoint_rpm = 2000;
 static uint16_t setPoint_pwm = 0;
 static uint16_t setPoint_mamp = 0;
 static uint8_t cruise_speed = 0;
-static uint8_t throttle_cmd = 0;
 static uint16_t pwm_target = 0;
 static uint16_t duty_setpoint = 0;
 
@@ -51,8 +51,6 @@ static uint32_t prev_adc_read = 0;
 static uint8_t motor_status = 0b00000000; //(etc|etc|etc|etc|etc|etc|overload|alive|)
 static uint8_t send_can = 0;
 static uint8_t overload = 0;
-static uint8_t BMS_status;
-static uint8_t restart_overload = 0;
 
 void timer_init_ts(){
 	TCCR1B |= (1<<CS10)|(1<<CS11);
@@ -60,6 +58,50 @@ void timer_init_ts(){
 	TCNT1 = 0;
 	TIMSK1 |= (1<<OCIE1A);
 	OCR1A = 12500 - 1;
+}
+
+typedef struct{
+	
+	uint8_t BMS_status;
+	uint8_t throttle_cmd;
+	uint8_t restart_overload;
+	uint16_t rpm;
+	uint32_t temp_mamp;
+	
+}SubModuleValues_t;
+
+
+SubModuleValues_t Values = {0};
+
+{
+	.BMS_status = 0,
+	.throttle_cmd = 0,
+	.restart_overload = 0,
+	.rpm = 0,
+	.temp_mamp = 0
+};
+
+void handle_can(SubModuleValues_t *vals, CanMessage_t *rx){
+	if (can_read_message_if_new(rx)){
+		//switch
+		if (rx->id == BMS_STATUS_CAN_ID){
+			printf("Status: %b\n", rx->data[0]);
+			vals->BMS_status = rx->data[0];
+		}if (rx->id == STEERING_WHEEL_CAN_ID){
+			printf("\t thrl: %u\n", rx->data[3]);
+			vals->throttle_cmd = rx->data[3];
+			vals->restart_overload = rx->data[1];
+		}if (rx->id == ENCODER_CAN_ID){
+			printf("\t\t rpm: %u\n", rx->data[ENCODER_CHANNEL+1]);
+			vals->rpm = (rx->data[ENCODER_CHANNEL] << 8);
+			vals->rpm |= rx->data[ENCODER_CHANNEL+1];
+			
+		}if (rx->id == CURRENT_CAN_ID){
+			printf("\t\t\t mamp: %u\n", rx->data[CURRENT_CAN_ID+1]);
+			vals->temp_mamp = (rx->data[0] << 8);
+			vals->temp_mamp |= rx->data[1];
+		}
+	}
 }
 
 int main(void)	
@@ -72,98 +114,85 @@ int main(void)
 	can_init(0,0);
 	timer_init_ts();
 	adc_init();
-	txFrame.id = MOTOR_1_STATUS_CAN_ID;	
+	txFrame.id = MOTOR_1_STATUS_CAN_ID;
 	txFrame.length = 7;
 	sei();
-	
+	printf("Starting in Idle \n");
 	// Output pin to turn off DCDC
 	DDRB |= (1 << PB4);
 	
     while (1){
 		if (send_can){
 			txFrame.data[0] = motor_status;
-			txFrame.data[1] = mamp >> 8;
-			txFrame.data[2] = mamp & 0x00FF;
+			txFrame.data[1] = Values.temp_mamp >> 8;
+			txFrame.data[2] = Values.temp_mamp & 0x00FF;
 			txFrame.data[3] = OCR3B >> 8;
 			txFrame.data[4] = OCR3B & 0x00FF;
-			txFrame.data[5] = throttle_cmd;
-			txFrame.data[6] = BMS_status;
+			txFrame.data[5] = Values.throttle_cmd;
+			txFrame.data[6] = Values.BMS_status;
 			can_send_message(&txFrame);
 			send_can = 0;
 		}
 				
-		switch(state){
+		switch(mode){
 			case NORMAL_MODE:
-				if (can_read_message_if_new(&rxFrame)){
+			
+				handle_can(&Values, &rxFrame);
+				
+				switch (state){
 					
-					if (rxFrame.id == BMS_STATUS_CAN_ID){
-						BMS_status = rxFrame.data[0];
-					}
-					
-					if(rxFrame.id == STEERING_WHEEL_CAN_ID){
-						throttle_cmd = rxFrame.data[3];
-						if (overload){
-							//listen for restart (Joystick Button)
-							restart_overload = rxFrame.data[1];
+					case IDLE:
+						
+						if(Values.BMS_status == 0x2){
+							printf("Switch: Idle -> Running\n");
+							PORTB |= (1 << PB4);
+							state = RUNNING;
+							break;
 						}
-					}
-					if(rxFrame.id == ENCODER_CAN_ID){
-						rpm = (rxFrame.data[ENC] << 8);
-						rpm |= rxFrame.data[ENC+1];
-					}
-					if(rxFrame.id == CURRENT_M){
-						mamp = (rxFrame.data[0] << 8);
-						mamp |= rxFrame.data[1];
-						if(mamp > 1000){
-							overload = 1;
-						}
-					}
-				}
-				if(BMS_status == 0x2){
-					if (overload){
-						//handle overload
-						OCR3B = 0;
-						motor_status |= 1;
-						if(restart_overload){
-							overload = 0;
-							restart_overload = 0;
-						}
-					}else{
+						
 						PORTB &= ~(1 << PB4);
-						duty_setpoint = throttle_cmd*(PWM_MAX_DUTY_CYCLE_AT_0_RPM + PWM_MAX_SCALING_RATIO*rpm)*0.01;
-						if (duty_setpoint > 719){
-							OCR3B = 719;
-							}else{
-							OCR3B = duty_setpoint;
+						OCR3B = 0;
+						break;
+						
+					case RUNNING:
+						if (Values.temp_mamp > MAX_MAMP){
+							printf("Switch: Running -> OverCurrent\n");
+							OCR3B = 0;
+							motor_status |= 1;
+							state = OVERLOAD; 
+							break;
 						}
-					}
-
-					
-				}else{
-					//turn off DCDC to precharge
-					PORTB |= (1 << PB4);
+						if(Values.BMS_status == 0){
+							printf("Switch: Running -> Idle\n");
+							OCR3B = 0;
+							state = IDLE;
+							break;
+						}
+						duty_setpoint = (Values.throttle_cmd)*(PWM_MAX_DUTY_CYCLE_AT_0_RPM + PWM_MAX_SCALING_RATIO*Values.rpm)*0.01;
+						if (duty_setpoint >	719){
+							OCR3B = 719;
+						}else{
+							OCR3B = duty_setpoint;
+						}	
+						break;
+						
+					case OVERLOAD:
+						if (Values.restart_overload){
+							printf("Switch: Overload -> Running\n");
+							state = RUNNING;
+							break;
+						}if (Values.BMS_status == 0){
+							printf("Switch: Overload -> Idle\n");
+							OCR3B = 0;
+							state = IDLE;
+						}
+						OCR3B = 0;
+						break;
 				}
 				break;
 				
 			case CC_MODE:
-			if (rxFrame.id == STEERING_WHEEL_CAN_ID){
-				if (rxFrame.data[5] > 75){
-					cruise_speed++;
-					setPoint_rpm = setPoint_rpm + 45;
-				}
-				if (rxFrame.data[5] < 25){
-					cruise_speed--;
-					setPoint_rpm = setPoint_rpm - 45;
-				}
-			}
-				
 			
-			if(rxFrame.id == ENCODER_CAN_ID){
-				cli();
-				rpm = (rxFrame.data[0] << 8);
-				rpm |= rxFrame.data[1];
-				sei();
-			}
 				break;
 				
 			case TORQUE_MODE:
@@ -180,7 +209,7 @@ int main(void)
 		}
     }
 }
-
+/*
 ISR(TIMER1_COMPA_vect){
 	///////////////////TORQUE CONTROL 10 Hz//////////////////////////
 	send_can = 1;
@@ -206,7 +235,7 @@ ISR(TIMER1_COMPA_vect){
 	/////////////////////////////////////////////////////////////
 	}
 }
-
+*/
 
 /* IMPLEMENT THIS TO NEW PCB
 ISR(TIMER3_COMPA_vect)
