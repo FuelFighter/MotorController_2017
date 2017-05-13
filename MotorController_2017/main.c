@@ -146,15 +146,14 @@ int main(void)
 					
 					case IDLE:
 						//printf("In case IDLE\n");
-						//if(Values.BMS_status == 0x2){
-						if(Values.horn == HORN){
+						if(Values.BMS_status == 0x2){
 							printf("Switch: Idle -> Running\n");
-							//PORTB |= (1 << PB4);
+							PORTB |= (1 << PB4);
 							state = RUNNING;
 							break;
 						}
 						
-						//PORTB &= ~(1 << PB4);
+						PORTB &= ~(1 << PB4);
 						OCR3B = 0;
 						
 						break;
@@ -167,8 +166,7 @@ int main(void)
 							state = OVERLOAD; 
 							break;
 						}
-						//if(Values.BMS_status == 0){
-						if(Values.horn == 0){
+						if(Values.BMS_status == 0){
 							printf("Switch: Running -> Idle\n");
 							OCR3B = 0;
 							state = IDLE;
