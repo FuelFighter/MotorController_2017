@@ -10,8 +10,8 @@
 #define MOTOR_CONTROLLER_SELECTION_H_
 
 // To choose motor controller, comment out opposite
-//#define MOTOR_CONTROLLER_1
-#define MOTOR_CONTROLLER_2
+#define MOTOR_CONTROLLER_1
+//#define MOTOR_CONTROLLER_2
 
 #ifdef MOTOR_CONTROLLER_1
 #define MOTOR_SELECT(for1, for2) (for1)
@@ -32,14 +32,17 @@
 
 #define BIT2MAMP						(32.23)
 #define TC								(93.4)
-#define MAX_MAMP						4500
+#define MAX_MAMP						MOTOR_SELECT(1000, 5000)
 #define MAX_RPM							4500
-#define PWM_MAX_DUTY_CYCLE_AT_0_RPM		40
-#define PWM_MAX_SCALING_RATIO (float)	(ICR3-PWM_MAX_DUTY_CYCLE_AT_0_RPM)/MAX_RPM
+#define PWM_MAX_DUTY_CYCLE_AT_0_RPM		80
+#define PWM_MAX_SCALING_RATIO (float)	(ICR3 - PWM_MAX_DUTY_CYCLE_AT_0_RPM)/MAX_RPM
 
 #define IDLE 0
 #define RUNNING 1
 #define OVERLOAD 2
+
+#define OFF 0
+#define ON 1
 
 
 #define HORN 2

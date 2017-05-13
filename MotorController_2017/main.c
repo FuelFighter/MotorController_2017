@@ -60,6 +60,7 @@ void timer_init_ts(){
 	OCR1A = 12500 - 1;
 }
 
+
 typedef struct{
 	
 	uint8_t BMS_status;
@@ -69,10 +70,10 @@ typedef struct{
 	uint32_t temp_mamp;
 	uint32_t horn;
 	
-}SubModuleValues_t;
+}ModuleValues_t;
 
 
-SubModuleValues_t Values = {
+ModuleValues_t Values = {
 	.BMS_status = 0,
 	.throttle_cmd = 0,
 	.restart_overload = 0,
@@ -81,7 +82,15 @@ SubModuleValues_t Values = {
 	.horn = 0
 };
 
-void handle_can(SubModuleValues_t *vals, CanMessage_t *rx){
+void toggle_DCDC(uint8_t OnOff){
+	if (OnOff){
+		PORTB &= ~(1 << PB4);
+	}else{
+		PORTB |= (1 << PB4);
+	}
+}
+
+void handle_can(ModuleValues_t *vals, CanMessage_t *rx){
 	if (can_read_message_if_new(rx)){
 		//switch
 		if (rx->id == BMS_STATUS_CAN_ID){
@@ -106,6 +115,7 @@ void handle_can(SubModuleValues_t *vals, CanMessage_t *rx){
 	}
 }
 
+
 int main(void)	
 {
 	cli();
@@ -117,12 +127,12 @@ int main(void)
 	timer_init_ts();
 	adc_init();
 	txFrame.id = MOTOR_1_STATUS_CAN_ID;
-	txFrame.length = 7;
+	txFrame.length = 8;
 	sei();
 	
-	printf("Starting in Idle \n");
 	// Output pin to turn off DCDC
 	DDRB |= (1 << PB4);
+	toggle_DCDC(OFF);
 	
     while (1){
 		if (send_can){
@@ -133,75 +143,109 @@ int main(void)
 			txFrame.data[4] = OCR3B & 0x00FF;
 			txFrame.data[5] = Values.throttle_cmd;
 			txFrame.data[6] = Values.BMS_status;
+			txFrame.data[7] = state;
 			can_send_message(&txFrame);
 			send_can = 0;
 		}
-				
+		
+		handle_can(&Values, &rxFrame);
+		
 		switch(mode){
 			case NORMAL_MODE:
-			
-				handle_can(&Values, &rxFrame);
-				
 				switch (state){
-					
 					case IDLE:
 						//printf("In case IDLE\n");
 						if(Values.BMS_status == 0x2){
-							printf("Switch: Idle -> Running\n");
-							PORTB |= (1 << PB4);
+							toggle_DCDC(ON);
 							state = RUNNING;
 							break;
 						}
 						
-						PORTB &= ~(1 << PB4);
+
 						OCR3B = 0;
-						
 						break;
-						
 					case RUNNING:
 						if (Values.temp_mamp > MAX_MAMP){
-							printf("Switch: Running -> OverCurrent\n");
 							OCR3B = 0;
 							motor_status |= 1;
 							state = OVERLOAD; 
 							break;
 						}
 						if(Values.BMS_status == 0){
-							printf("Switch: Running -> Idle\n");
 							OCR3B = 0;
+							toggle_DCDC(OFF);
 							state = IDLE;
 							break;
 						}
-						duty_setpoint = (Values.throttle_cmd)*(PWM_MAX_DUTY_CYCLE_AT_0_RPM + PWM_MAX_SCALING_RATIO*Values.rpm)*0.01;
+						duty_setpoint = (Values.throttle_cmd)*(PWM_MAX_DUTY_CYCLE_AT_0_RPM + PWM_MAX_SCALING_RATIO*(Values.rpm))*0.01;
 						if (duty_setpoint >	799){
 							OCR3B = 799;
 						}else{
 							OCR3B = duty_setpoint;
 						}	
-						printf("OCR: %u\n", OCR3B);
 						break;
 						
 					case OVERLOAD:
 						if (Values.restart_overload){
-							printf("Switch: Overload -> Running\n");
 							state = RUNNING;
 							break;
-						}if (Values.BMS_status == 0){
-							printf("Switch: Overload -> Idle\n");
+							}if (Values.BMS_status == 0){
 							OCR3B = 0;
+							toggle_DCDC(OFF);
 							state = IDLE;
+							}
+							OCR3B = 0;
+							break;
 						}
-						OCR3B = 0;
 						break;
-				}
-				break;
 				
 			case CC_MODE:
 			
 				break;
 				
 			case TORQUE_MODE:
-				
+				switch(state){
+					case IDLE:
+					if(Values.BMS_status == 0x2){
+						printf("Switch: Idle -> Running\n");
+						PORTB |= (1 << PB4);
+						state = RUNNING;
+
+						break;
+					}
+						OCR3B = 0;
+					
+						break;
+					case RUNNING:
+					if (Values.temp_mamp > MAX_MAMP){
+						printf("Switch: Running -> OverCurrent\n");
+						OCR3B = 0;
+						motor_status |= 1;
+						state = OVERLOAD;
+						break;
+					}
+					if(Values.BMS_status == 0){
+						printf("Switch: Running -> Idle\n");
+						OCR3B = 0;
+						state = IDLE;
+						break;
+					}
+					
+					break;
+					case OVERLOAD:
+					if (Values.restart_overload){
+						printf("Switch: Overload -> Running\n");
+						state = RUNNING;
+						break;
+					}if (Values.BMS_status == 0){
+						printf("Switch: Overload -> Idle\n");
+						OCR3B = 0;
+						state = IDLE;
+						break;
+					}
+					
+					break;
+				}
 				break;
 	
 			case TEST_MODE:				
@@ -214,12 +258,14 @@ int main(void)
 		}
     }
 }
-ISR(BADISR_vect){}
 
-/*
+
+
 ISR(TIMER1_COMPA_vect){
 	///////////////////TORQUE CONTROL 10 Hz//////////////////////////
 	send_can = 1;
+}
+/*
 	int add = controller_trq(&Current, mamp, setPoint_mamp);
 	if ((OCR3B-add) > 0xFFF){
 		OCR3B = 0;

@@ -35,9 +35,17 @@ int32_t controller(Pid_t *PID, uint16_t currentRpm, uint16_t setPoint)
 	return dutyCycle;
 }
 
-int32_t controller_trq(Pid_t *PID, uint16_t amp, uint16_t amp_sp){
-	int32_t out = pid(PID, amp, amp_sp);
+int32_t controller_trq(Pid_t *PID, uint16_t amp, uint16_t amp_sp, int32_t *out_last){
+	int32_t out = 0;
+	
+	if ((amp_sp - amp) > 0){
+	
+	out = pid(PID, amp, amp_sp);
+	}else{
+		out = out_last;
+	}
 	//printf("Out: %u\n",out);
+	
 	return out;
 }
 
