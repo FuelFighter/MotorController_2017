@@ -53,6 +53,7 @@ static uint8_t send_can = 0;
 static uint8_t overload = 0;
 static uint8_t BMS_status;
 static uint8_t restart_overload = 0;
+static uint8_t breaking = 0;
 
 void timer_init_ts(){
 	TCCR1B |= (1<<CS10)|(1<<CS11);
@@ -72,7 +73,7 @@ int main(void)
 	can_init(0,0);
 	timer_init_ts();
 	adc_init();
-	txFrame.id = MOTOR_1_STATUS_CAN_ID;	
+	txFrame.id = CAN_ID;
 	txFrame.length = 7;
 	sei();
 	
@@ -95,7 +96,7 @@ int main(void)
 		switch(state){
 			case NORMAL_MODE:
 				if (can_read_message_if_new(&rxFrame)){
-					
+
 					if (rxFrame.id == BMS_STATUS_CAN_ID){
 						BMS_status = rxFrame.data[0];
 					}
@@ -105,6 +106,7 @@ int main(void)
 						if (overload){
 							//listen for restart (Joystick Button)
 							restart_overload = rxFrame.data[1];
+							
 						}
 					}
 					if(rxFrame.id == ENCODER_CAN_ID){
@@ -114,7 +116,7 @@ int main(void)
 					if(rxFrame.id == CURRENT_M){
 						mamp = (rxFrame.data[0] << 8);
 						mamp |= rxFrame.data[1];
-						if(mamp > 1000){
+						if(mamp > MAX_MAMP){
 							overload = 1;
 						}
 					}
@@ -184,6 +186,7 @@ int main(void)
 ISR(TIMER1_COMPA_vect){
 	///////////////////TORQUE CONTROL 10 Hz//////////////////////////
 	send_can = 1;
+	/*
 	int add = controller_trq(&Current, mamp, setPoint_mamp);
 	if ((OCR3B-add) > 0xFFF){
 		OCR3B = 0;
@@ -204,7 +207,7 @@ ISR(TIMER1_COMPA_vect){
 		}
 		count_speed = 0;
 	/////////////////////////////////////////////////////////////
-	}
+	}*/
 }
 
 

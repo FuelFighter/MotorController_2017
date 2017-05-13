@@ -9,6 +9,8 @@
 #ifndef MOTOR_CONTROLLER_SELECTION_H_
 #define MOTOR_CONTROLLER_SELECTION_H_
 
+#include "UniversalModuleDrivers/can.h"
+
 // To choose motor controller, comment out opposite
 //#define MOTOR_CONTROLLER_1
 #define MOTOR_CONTROLLER_2
@@ -21,6 +23,7 @@
 #define MOTOR_SELECT(for1, for2) (for2)
 #endif
 
+#define CAN_ID		MOTOR_SELECT(MOTOR_1_STATUS_CAN_ID, MOTOR_2_STATUS_CAN_ID)
 #define CURRENT_M   MOTOR_SELECT(100, 101)
 #define ENC			MOTOR_SELECT(0, 2)
 
@@ -37,9 +40,9 @@
 
 #define BIT2MAMP						(32.23)
 #define TC								(93.4)
-#define MAX_MAMP						2000
+#define MAX_MAMP						MOTOR_SELECT(3500, 5000)
 #define MAX_RPM							4500
-#define PWM_MAX_DUTY_CYCLE_AT_0_RPM		8
+#define PWM_MAX_DUTY_CYCLE_AT_0_RPM		80
 #define PWM_MAX_SCALING_RATIO (float)	(ICR3-PWM_MAX_DUTY_CYCLE_AT_0_RPM)/MAX_RPM
 
 #endif /* MOTOR_CONTROLLER_SELECTION_H_ */
