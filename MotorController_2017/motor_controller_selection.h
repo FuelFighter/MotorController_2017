@@ -33,12 +33,16 @@
 #define BIT2MAMP						(32.23)
 #define TC								(93.4)
 #define MAX_MAMP						2000
-#define MAX_RPM							4500
-#define PWM_MAX_DUTY_CYCLE_AT_0_RPM		8
+#define MAX_RPM							2400
+#define PWM_MAX_DUTY_CYCLE_AT_0_RPM		40
 #define PWM_MAX_SCALING_RATIO (float)	(ICR3-PWM_MAX_DUTY_CYCLE_AT_0_RPM)/MAX_RPM
 
 #define IDLE 0
 #define RUNNING 1
 #define OVERLOAD 2
+
+
+#define HORN 2
+#define JOYSTICKBUTTON 1
 
 #endif /* MOTOR_CONTROLLER_SELECTION_H_ */

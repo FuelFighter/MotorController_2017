@@ -67,37 +67,39 @@ typedef struct{
 	uint8_t restart_overload;
 	uint16_t rpm;
 	uint32_t temp_mamp;
+	uint32_t horn;
 	
 }SubModuleValues_t;
 
 
-SubModuleValues_t Values = {0};
-
-{
+SubModuleValues_t Values = {
 	.BMS_status = 0,
 	.throttle_cmd = 0,
 	.restart_overload = 0,
 	.rpm = 0,
-	.temp_mamp = 0
+	.temp_mamp = 0,
+	.horn = 0
 };
 
 void handle_can(SubModuleValues_t *vals, CanMessage_t *rx){
 	if (can_read_message_if_new(rx)){
 		//switch
 		if (rx->id == BMS_STATUS_CAN_ID){
-			printf("Status: %b\n", rx->data[0]);
+			//printf("Status: %b\n", rx->data[0]);
 			vals->BMS_status = rx->data[0];
 		}if (rx->id == STEERING_WHEEL_CAN_ID){
-			printf("\t thrl: %u\n", rx->data[3]);
+			//printf("\t thrl: %u\n", rx->data[3]);
 			vals->throttle_cmd = rx->data[3];
-			vals->restart_overload = rx->data[1];
+			vals->restart_overload = rx->data[1] & JOYSTICKBUTTON;
+			//printf("Joy: %u\t", vals->restart_overload);
+			vals->horn = rx->data[1] & HORN;
+			//printf("HORN: %u\t",vals->horn);
 		}if (rx->id == ENCODER_CAN_ID){
-			printf("\t\t rpm: %u\n", rx->data[ENCODER_CHANNEL+1]);
+			//printf("\t\t rpm: %u\n", rx->data[ENCODER_CHANNEL+1]);
 			vals->rpm = (rx->data[ENCODER_CHANNEL] << 8);
 			vals->rpm |= rx->data[ENCODER_CHANNEL+1];
-			
 		}if (rx->id == CURRENT_CAN_ID){
-			printf("\t\t\t mamp: %u\n", rx->data[CURRENT_CAN_ID+1]);
+			//printf("\t\t\t mamp: %u\n", rx->data[CURRENT_CAN_ID+1]);
 			vals->temp_mamp = (rx->data[0] << 8);
 			vals->temp_mamp |= rx->data[1];
 		}
@@ -117,6 +119,7 @@ int main(void)
 	txFrame.id = MOTOR_1_STATUS_CAN_ID;
 	txFrame.length = 7;
 	sei();
+	
 	printf("Starting in Idle \n");
 	// Output pin to turn off DCDC
 	DDRB |= (1 << PB4);
@@ -142,16 +145,18 @@ int main(void)
 				switch (state){
 					
 					case IDLE:
-						
-						if(Values.BMS_status == 0x2){
+						//printf("In case IDLE\n");
+						//if(Values.BMS_status == 0x2){
+						if(Values.horn == HORN){
 							printf("Switch: Idle -> Running\n");
-							PORTB |= (1 << PB4);
+							//PORTB |= (1 << PB4);
 							state = RUNNING;
 							break;
 						}
 						
-						PORTB &= ~(1 << PB4);
+						//PORTB &= ~(1 << PB4);
 						OCR3B = 0;
+						
 						break;
 						
 					case RUNNING:
@@ -162,18 +167,20 @@ int main(void)
 							state = OVERLOAD; 
 							break;
 						}
-						if(Values.BMS_status == 0){
+						//if(Values.BMS_status == 0){
+						if(Values.horn == 0){
 							printf("Switch: Running -> Idle\n");
 							OCR3B = 0;
 							state = IDLE;
 							break;
 						}
 						duty_setpoint = (Values.throttle_cmd)*(PWM_MAX_DUTY_CYCLE_AT_0_RPM + PWM_MAX_SCALING_RATIO*Values.rpm)*0.01;
-						if (duty_setpoint >	719){
-							OCR3B = 719;
+						if (duty_setpoint >	799){
+							OCR3B = 799;
 						}else{
 							OCR3B = duty_setpoint;
 						}	
+						printf("OCR: %u\n", OCR3B);
 						break;
 						
 					case OVERLOAD:
@@ -209,6 +216,8 @@ int main(void)
 		}
     }
 }
+ISR(BADISR_vect){}
+
 /*
 ISR(TIMER1_COMPA_vect){
 	///////////////////TORQUE CONTROL 10 Hz//////////////////////////
