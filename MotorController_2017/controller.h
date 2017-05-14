@@ -13,6 +13,7 @@
 #include "pid.h"
 
 int32_t controller(Pid_t *PID, uint16_t currentRpm, uint16_t setPoint);
+int32_t controller_current(Pid_t *PID, uint16_t amp, uint16_t amp_sp);
 int32_t controller_trq(Pid_t *PID, uint16_t amp, uint16_t amp_sp);
 void current_sample(uint32_t *current_cumulative);
 #endif /* CONTROLLER_H_ */

@@ -8,6 +8,7 @@
 #include <avr/io.h>
 #include "UniversalModuleDrivers/usbdb.h"
 #include "UniversalModuleDrivers/adc.h"
+#include "motor_controller_selection.h"
 #include "pid.h"
 
 #define RPMTO8BIT 0.051
@@ -34,6 +35,11 @@ int32_t controller(Pid_t *PID, uint16_t currentRpm, uint16_t setPoint)
 	//printf("DC: %u\n",dutyCycle);
 	return dutyCycle;
 }
+
+int32_t controller_current(Pid_t *PID, uint16_t amp, uint16_t amp_sp){
+	int32_t pid_out = pid(PID, amp, amp_sp);
+}
+
 
 int32_t controller_trq(Pid_t *PID, uint16_t amp, uint16_t amp_sp, int32_t *out_last){
 	int32_t out = 0;
