@@ -12,8 +12,8 @@
 #include "UniversalModuleDrivers/can.h"
 
 // To choose motor controller, comment out opposite
-//#define MOTOR_CONTROLLER_1
-#define MOTOR_CONTROLLER_2
+#define MOTOR_CONTROLLER_1
+//#define MOTOR_CONTROLLER_2
 
 #ifdef MOTOR_CONTROLLER_1
 #define MOTOR_SELECT(for1, for2) (for1)
@@ -47,5 +47,8 @@
 
 #define HORN 2
 #define JOYSTICKBUTTON 1
+
+#define LOWPASS_CONSTANT (0.1)
+#define BIT2MAMP (32.23)
 
 #endif /* MOTOR_CONTROLLER_SELECTION_H_ */
