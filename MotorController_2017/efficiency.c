@@ -6,6 +6,7 @@
  */ 
 
 #include "motorefficiencies.h"
+#include <avr/io.h>
 #define MOTOR_ID 1
 #define WHEEL_TO_MOTOR1_RPM 10
 #define WHEEL_TO_MOTOR2_RPM 14

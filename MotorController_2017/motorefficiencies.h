@@ -9,8 +9,6 @@
 #ifndef MOTOREFFICIENCIES_H_
 #define MOTOREFFICIENCIES_H_
 
-#endif /* MOTOREFFICIENCIES_H_ */
-
 #include <avr/pgmspace.h>
 #include <avr/io.h>
 
@@ -199,3 +197,5 @@ const unsigned char PROGMEM motor2[101][75] = {
 
 
 };
+
+#endif /* MOTOREFFICIENCIES_H_ */

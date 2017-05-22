@@ -38,6 +38,7 @@ int32_t controller(Pid_t *PID, uint16_t currentRpm, uint16_t setPoint)
 
 int32_t controller_current(Pid_t *PID, uint16_t amp, uint16_t amp_sp){
 	int32_t pid_out = pid(PID, amp, amp_sp);
+	return pid_out;
 }
 
 
@@ -48,7 +49,7 @@ int32_t controller_trq(Pid_t *PID, uint16_t amp, uint16_t amp_sp, int32_t *out_l
 	
 	out = pid(PID, amp, amp_sp);
 	}else{
-		out = out_last;
+		out = *out_last;
 	}
 	//printf("Out: %u\n",out);
 	
