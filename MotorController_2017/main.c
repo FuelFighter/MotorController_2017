@@ -99,7 +99,7 @@ void handle_can(ModuleValues_t *vals, CanMessage_t *rx){
 				break;
 			case STEERING_WHEEL_CAN_ID:
 				vals->throttle_cmd = rx->data.u8[3];
-				vals->restart_overload = rx->data.u8[1] & JOYSTICKBUTTON;
+				vals->restart_overload = rx->data.u8[1] & HORN;
 				vals->deadman = rx->data.u8[2];
 				break;
 			case ENCODER_CAN_ID:
